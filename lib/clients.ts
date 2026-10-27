@@ -6,10 +6,10 @@ export const CLIENTS: {
   fullName: string;
   description: string;
 }[] = [
-  { slug: "gu-gangnam", name: "GU강남", fullName: "지유의원 강남점", description: "피부과 · 해외 환자" },
-  { slug: "gu-ilsan", name: "GU일산", fullName: "지유의원 일산점", description: "피부과 · 로컬" },
-  { slug: "luho", name: "루호", fullName: "루호성형외과", description: "성형외과 · 국가별 타겟" },
-  { slug: "cellora", name: "셀로라", fullName: "셀로라", description: "줄기세포 · B2B" },
+  { slug: "gu-gangnam", name: "GU강남", fullName: "지유의원 강남점", description: "피부과 · 강남점" },
+  { slug: "gu-ilsan", name: "GU일산", fullName: "지유의원 일산점", description: "피부과 · 일산점" },
+  { slug: "cellora", name: "셀로라", fullName: "셀로라", description: "피부과 · 강남점" },
+  { slug: "luho", name: "루호", fullName: "루호성형외과", description: "성형외과 · 신사점" },
 ];
 
 export const CLIENT_SLUGS = CLIENTS.map((c) => c.slug);

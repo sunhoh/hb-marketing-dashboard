@@ -8,6 +8,13 @@
       "when": 1793075767527,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793087196541,
+      "tag": "0001_sns_snapshots",
+      "breakpoints": true
     }
   ]
 }

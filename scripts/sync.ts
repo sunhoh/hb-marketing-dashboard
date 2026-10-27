@@ -9,8 +9,9 @@ import {
   syncNaverSearchAd,
 } from "../db/sync/naver-searchad";
 import { syncSheet } from "../db/sync/sheet";
+import { isYoutubeConfigured, syncYoutube } from "../db/sync/youtube";
 import { CLIENTS, CHANNEL_LABELS } from "../lib/clients";
-import { formatWon } from "../lib/metrics";
+import { formatNumber, formatWon } from "../lib/metrics";
 
 const name = (slug: string) =>
   CLIENTS.find((c) => c.slug === slug)?.name ?? slug;
@@ -51,11 +52,25 @@ async function naver() {
   }
 }
 
+async function youtube() {
+  if (!isYoutubeConfigured()) {
+    console.log("유튜브: 설정 없음(건너뜀)");
+    return;
+  }
+  console.log("유튜브 가져오는 중…");
+  for (const r of await syncYoutube()) {
+    console.log(
+      `  ${name(r.client)} "${r.title}": 구독자 ${formatNumber(r.subscribers)}, 누적 조회수 ${formatNumber(r.totalViews)}`,
+    );
+  }
+}
+
 async function main() {
   let failed = false;
   for (const [label, job] of [
     ["구글 시트", sheet],
     ["네이버 검색광고", naver],
+    ["유튜브", youtube],
   ] as const) {
     try {
       await job();

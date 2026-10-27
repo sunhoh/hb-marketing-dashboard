@@ -18,7 +18,7 @@ import {
 import type { ClientSlug } from "@/lib/types";
 
 /** 데이터가 어디서 왔는지 — 화면의 "연결 끊김" 경고와 디버깅에 쓴다 */
-export type Source = "meta_api" | "naver_api" | "instagram_api" | "sheet" | "sample";
+export type Source = "meta_api" | "naver_api" | "instagram_api" | "youtube_api" | "sheet" | "sample";
 
 const client = () => text("client").$type<ClientSlug>().notNull();
 const source = () => text("source").$type<Source>().notNull();
@@ -124,6 +124,25 @@ export const snsStats = pgTable(
     syncedAt: syncedAt(),
   },
   (t) => [unique("sns_stats_key").on(t.weekStart, t.client, t.platform)],
+);
+
+/**
+ * SNS 누적값 스냅숏(API 가 하루 한 번 기록). 유튜브는 기간 조회수를 주지 않아서
+ * 누적 조회수의 주간 차이로 sns_stats 의 views 를 만든다.
+ */
+export const snsSnapshots = pgTable(
+  "sns_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    client: client(),
+    platform: text("platform").$type<"instagram" | "youtube" | "tiktok">().notNull(),
+    followers: integer("followers").notNull(),
+    totalViews: bigint("total_views", { mode: "number" }).notNull(),
+    source: source(),
+    syncedAt: syncedAt(),
+  },
+  (t) => [unique("sns_snapshots_key").on(t.date, t.client, t.platform)],
 );
 
 /** 동기화 실행 기록. 마지막 성공이 오래되면 화면에 "연결 끊김"을 띄운다 */
