@@ -39,7 +39,7 @@ function config() {
       if (
         i < 0 ||
         !isClientSlug(client) ||
-        !/^(@[\w.-]+|UC[\w-]{22})$/.test(channel)
+        !/^(@[\p{L}\p{N}._-]+|UC[\w-]{22})$/u.test(channel)
       ) {
         throw new Error(
           `YOUTUBE_CHANNELS 형식이 틀렸어요: "${pair}" (예: gu-gangnam:@jiyuclinic)`,
@@ -123,7 +123,7 @@ export async function syncYoutube() {
         part: "snippet,statistics",
         key: cfg.apiKey,
       });
-      params.set(channel.startsWith("@") ? "forHandle" : "id", channel);
+      params.set(channel.startsWith("@") ? "forHandle" : "id", channel.normalize("NFC"));
       const res = await fetch(
         `https://www.googleapis.com/youtube/v3/channels?${params}`,
       );
