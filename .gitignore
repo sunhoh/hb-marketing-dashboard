@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local database (PGlite)
 /.data/
+
+# service account keys
+/.secrets/
