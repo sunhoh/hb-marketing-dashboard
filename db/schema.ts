@@ -145,6 +145,39 @@ export const snsSnapshots = pgTable(
   (t) => [unique("sns_snapshots_key").on(t.date, t.client, t.platform)],
 );
 
+/** 유튜브 영상(공개 정보). 조회수·좋아요·댓글은 동기화 때의 누적값 */
+export const youtubeVideos = pgTable(
+  "youtube_videos",
+  {
+    id: serial("id").primaryKey(),
+    client: client(),
+    videoId: text("video_id").notNull(),
+    channelId: text("channel_id").notNull(),
+    title: text("title").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    durationSec: integer("duration_sec").notNull(),
+    isShort: integer("is_short").notNull().default(0), // 3분 이하 세로 영상 추정(1/0)
+    thumbnailUrl: text("thumbnail_url"),
+    views: bigint("views", { mode: "number" }).notNull(),
+    likes: integer("likes"),
+    comments: integer("comments"),
+    syncedAt: syncedAt(),
+  },
+  (t) => [unique("youtube_videos_key").on(t.client, t.videoId)],
+);
+
+/** 영상별 누적 조회수 스냅숏(하루 한 번). 나중에 '기간 중 조회수가 많이 늘어난 영상'에 쓴다 */
+export const youtubeVideoSnapshots = pgTable(
+  "youtube_video_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    videoId: text("video_id").notNull(),
+    views: bigint("views", { mode: "number" }).notNull(),
+  },
+  (t) => [unique("youtube_video_snapshots_key").on(t.date, t.videoId)],
+);
+
 /** 동기화 실행 기록. 마지막 성공이 오래되면 화면에 "연결 끊김"을 띄운다 */
 export const syncRuns = pgTable("sync_runs", {
   id: serial("id").primaryKey(),

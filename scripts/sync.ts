@@ -60,7 +60,7 @@ async function youtube() {
   console.log("유튜브 가져오는 중…");
   for (const r of await syncYoutube()) {
     console.log(
-      `  ${name(r.client)} "${r.title}": 구독자 ${formatNumber(r.subscribers)}, 누적 조회수 ${formatNumber(r.totalViews)}`,
+      `  ${name(r.client)} "${r.title}": 구독자 ${formatNumber(r.subscribers)}, 누적 조회수 ${formatNumber(r.totalViews)}, 최근 영상 ${r.videos}개`,
     );
   }
 }

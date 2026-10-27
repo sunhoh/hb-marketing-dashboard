@@ -3,7 +3,7 @@
  */
 import { CHANNEL_LABELS, CLIENTS, CONVERSION_LABELS } from "./clients";
 import { cpc, ctr, deriveAll, sumTotals, type DerivedTotals } from "./metrics";
-import { addDays, PERIODS, resolvePeriod } from "./periods";
+import { addDays, mondayOf, PERIODS, resolvePeriod } from "./periods";
 import type {
   ClientSlug,
   Creative,
@@ -11,6 +11,7 @@ import type {
   PlaceKeywordRank,
   PlaceStat,
   SnsStat,
+  VideoStat,
   ViralStat,
   WeeklyMetric,
 } from "./types";
@@ -28,11 +29,13 @@ export type Dataset = {
   placeStats: PlaceStat[];
   viral: ViralStat[];
   sns: SnsStat[];
+  videos: VideoStat[];
 };
 
 /** 채널 표에서 '평소보다 나쁨'으로 칠하는 문턱 (기준 = 같은 채널·세부의 직전 12주) */
 export const BASELINE_TOLERANCE = 0.2;
 export const BASELINE_WEEKS = 12;
+export const YOUTUBE_TOP = 5;
 /** 소재 OFF 후보 문턱 (기준 = 같은 클라이언트 메타 소재 전체 값) */
 export const OFF_CTR_RATIO = 0.7;
 export const OFF_CPC_RATIO = 1.3;
@@ -219,6 +222,22 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
     };
   });
 
+  // 유튜브 영상 — 업로드한 주가 기간에 속한 영상
+  const videoRows = byClient(ds.videos, client);
+  const inPeriodWeeks = (ws: string[]) => {
+    const set = new Set(ws);
+    return videoRows.filter((v) => set.has(mondayOf(v.publishedOn)));
+  };
+  const currentVideos = inPeriodWeeks(weeks.current);
+  const youtube = videoRows.length
+    ? {
+        uploads: currentVideos.length,
+        previousUploads: inPeriodWeeks(weeks.previous).length,
+        shorts: currentVideos.filter((v) => v.isShort).length,
+        top: [...currentVideos].sort((a, b) => b.views - a.views).slice(0, YOUTUBE_TOP),
+      }
+    : null;
+
   return {
     client,
     period,
@@ -232,6 +251,6 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
     weekly,
     channels,
     creatives,
-    organic: { place, viral, sns },
+    organic: { place, viral, sns, youtube },
   };
 }

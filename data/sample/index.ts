@@ -224,4 +224,5 @@ export const SAMPLE_DATASET: Dataset = {
   placeStats: PLACE_STATS,
   viral: VIRAL_STATS,
   sns: SNS_STATS,
+  videos: [],
 };

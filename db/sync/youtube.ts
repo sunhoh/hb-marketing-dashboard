@@ -2,6 +2,7 @@
  * YouTube Data API → sns_snapshots(하루 한 번 누적값) → sns_stats(주 단위, source = "youtube_api").
  * API 는 기간 조회수를 주지 않으므로, 주 조회수 = 그 주 마지막 누적 조회수 − 지난주 마지막 누적 조회수.
  * 그래서 첫 동기화 주의 조회수는 비어 있고, 다음 주부터 채워진다. 구독자 수는 유튜브가 반올림해서 준다(예: 1.23만).
+ * 영상 목록(최근 VIDEO_LOOKBACK_DAYS 일 업로드)과 영상별 누적 조회수 스냅숏도 함께 저장한다.
  *
  * .env.local
  *   YOUTUBE_API_KEY   구글 클라우드 API 키(YouTube Data API v3 로 제한)
@@ -9,15 +10,28 @@
  */
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { snsSnapshots, snsStats, syncRuns } from "@/db/schema";
+import {
+  snsSnapshots,
+  snsStats,
+  syncRuns,
+  youtubeVideoSnapshots,
+  youtubeVideos,
+} from "@/db/schema";
 import { isClientSlug } from "@/lib/clients";
-import { mondayOf } from "@/lib/periods";
+import { addDays, mondayOf } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
+
+const API = "https://www.googleapis.com/youtube/v3";
+/** 영상 목록을 가져올 기간. 기간 비교(직전 12주·전월)에 충분하게 */
+const VIDEO_LOOKBACK_DAYS = 400;
+/** 유튜브 쇼츠는 최대 3분 — 길이로 추정한다 */
+const SHORTS_MAX_SEC = 180;
 
 type ChannelResponse = {
   items?: {
     id: string;
     snippet: { title: string };
+    contentDetails?: { relatedPlaylists?: { uploads?: string } };
     statistics: {
       subscriberCount?: string;
       viewCount?: string;
@@ -53,6 +67,131 @@ function config() {
 
 export function isYoutubeConfigured() {
   return config() !== null;
+}
+
+async function yt<T>(
+  path: string,
+  params: Record<string, string>,
+  apiKey: string,
+) {
+  const res = await fetch(
+    `${API}/${path}?${new URLSearchParams({ ...params, key: apiKey })}`,
+  );
+  if (!res.ok)
+    throw new Error(
+      `YouTube ${path} ${res.status}: ${(await res.text()).slice(0, 300)}`,
+    );
+  return (await res.json()) as T;
+}
+
+/** "PT1H2M3S" → 초 */
+function durationToSec(iso: string) {
+  const m = iso.match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return 0;
+  const [, d, h, mi, se] = m.map((x) => Number(x ?? 0));
+  return d * 86400 + h * 3600 + mi * 60 + se;
+}
+
+type PlaylistItems = {
+  nextPageToken?: string;
+  items: { contentDetails: { videoId: string; videoPublishedAt?: string } }[];
+};
+type Videos = {
+  items: {
+    id: string;
+    snippet: {
+      title: string;
+      publishedAt: string;
+      thumbnails?: { medium?: { url: string } };
+    };
+    contentDetails: { duration: string };
+    statistics: {
+      viewCount?: string;
+      likeCount?: string;
+      commentCount?: string;
+    };
+  }[];
+};
+
+/** 업로드 재생목록에서 최근 영상을 모아 youtube_videos 와 스냅숏에 저장. 저장한 영상 수를 돌려준다 */
+async function syncVideos(
+  client: ClientSlug,
+  channelId: string,
+  uploads: string,
+  apiKey: string,
+  today: string,
+) {
+  const cutoff = addDays(today, -VIDEO_LOOKBACK_DAYS);
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await yt<PlaylistItems>(
+      "playlistItems",
+      {
+        part: "contentDetails",
+        playlistId: uploads,
+        maxResults: "50",
+        ...(pageToken ? { pageToken } : {}),
+      },
+      apiKey,
+    );
+    let reachedOld = false;
+    for (const it of page.items) {
+      const published = it.contentDetails.videoPublishedAt?.slice(0, 10);
+      if (published && published < cutoff) reachedOld = true;
+      else ids.push(it.contentDetails.videoId);
+    }
+    // 업로드 목록은 최신순이라 오래된 영상이 나오면 멈춘다
+    pageToken = reachedOld ? undefined : page.nextPageToken;
+  } while (pageToken);
+
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = await yt<Videos>(
+      "videos",
+      {
+        part: "snippet,contentDetails,statistics",
+        id: ids.slice(i, i + 50).join(","),
+      },
+      apiKey,
+    );
+    for (const v of batch.items) {
+      const durationSec = durationToSec(v.contentDetails.duration);
+      const row = {
+        client,
+        videoId: v.id,
+        channelId,
+        title: v.snippet.title,
+        publishedAt: new Date(v.snippet.publishedAt),
+        durationSec,
+        isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC ? 1 : 0,
+        thumbnailUrl: v.snippet.thumbnails?.medium?.url ?? null,
+        views: Number(v.statistics.viewCount ?? 0),
+        likes:
+          v.statistics.likeCount === undefined
+            ? null
+            : Number(v.statistics.likeCount),
+        comments:
+          v.statistics.commentCount === undefined
+            ? null
+            : Number(v.statistics.commentCount),
+      };
+      await db
+        .insert(youtubeVideos)
+        .values(row)
+        .onConflictDoUpdate({
+          target: [youtubeVideos.client, youtubeVideos.videoId],
+          set: { ...row, syncedAt: sql`now()` },
+        });
+      await db
+        .insert(youtubeVideoSnapshots)
+        .values({ date: today, videoId: v.id, views: row.views })
+        .onConflictDoUpdate({
+          target: [youtubeVideoSnapshots.date, youtubeVideoSnapshots.videoId],
+          set: { views: row.views },
+        });
+    }
+  }
+  return ids.length;
 }
 
 function seoulToday() {
@@ -117,13 +256,17 @@ export async function syncYoutube() {
       title: string;
       subscribers: number;
       totalViews: number;
+      videos: number;
     }[] = [];
     for (const { client, channel } of cfg.channels) {
       const params = new URLSearchParams({
-        part: "snippet,statistics",
+        part: "snippet,statistics,contentDetails",
         key: cfg.apiKey,
       });
-      params.set(channel.startsWith("@") ? "forHandle" : "id", channel.normalize("NFC"));
+      params.set(
+        channel.startsWith("@") ? "forHandle" : "id",
+        channel.normalize("NFC"),
+      );
       const res = await fetch(
         `https://www.googleapis.com/youtube/v3/channels?${params}`,
       );
@@ -157,7 +300,12 @@ export async function syncYoutube() {
           set: { followers, totalViews, syncedAt: sql`now()` },
         });
       await rebuildWeekly(client);
+      const uploads = item.contentDetails?.relatedPlaylists?.uploads;
+      const videos = uploads
+        ? await syncVideos(client, item.id, uploads, cfg.apiKey, today)
+        : 0;
       report.push({
+        videos,
         client,
         title: item.snippet.title,
         subscribers: followers,

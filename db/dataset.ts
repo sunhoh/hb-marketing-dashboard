@@ -7,12 +7,16 @@ import type { Dataset } from "@/lib/build-metrics";
 import { mondayOf, weeksUntil } from "@/lib/periods";
 import type { ClientSlug, Creative, WeeklyMetric } from "@/lib/types";
 import { db } from ".";
-import { adMetrics, creatives, placeRanks, placeStats, snsStats, syncRuns, viralPosts } from "./schema";
+import { adMetrics, creatives, placeRanks, placeStats, snsStats, syncRuns, viralPosts, youtubeVideos } from "./schema";
 
 /** 기간 비교(최근 12주 vs 직전 12주, 지난달 vs 그 전달)에 충분한 주 수 */
 const WEEK_COUNT = 30;
 /** 플레이스 카드는 지금 GU일산만 */
 const PLACE_CLIENT: ClientSlug = "gu-ilsan";
+
+function seoulDate(d: Date) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
+}
 
 function seoulToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -54,7 +58,7 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
   const weeks = weeksUntil(today, WEEK_COUNT);
   const from = weeks[0];
 
-  const [ads, creativeRows, ranks, stats, posts, sns, lastRun] = await Promise.all([
+  const [ads, creativeRows, ranks, stats, posts, sns, videos, lastRun] = await Promise.all([
     db.select().from(adMetrics).where(gte(adMetrics.date, from)),
     db.select().from(creatives),
     db
@@ -65,6 +69,7 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
     db.select().from(placeStats).where(and(gte(placeStats.weekStart, from), eq(placeStats.client, PLACE_CLIENT))),
     db.select().from(viralPosts).where(gte(viralPosts.publishedOn, from)),
     db.select().from(snsStats).where(gte(snsStats.weekStart, from)),
+    db.select().from(youtubeVideos).where(gte(youtubeVideos.publishedAt, new Date(`${from}T00:00:00+09:00`))),
     db
       .select({ finishedAt: syncRuns.finishedAt })
       .from(syncRuns)
@@ -100,6 +105,16 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
     placeRanks: ranks.flatMap((r) => (r.rank === null ? [] : [{ weekStart: r.weekStart, keyword: r.keyword, rank: r.rank }])),
     placeStats: stats.map((s) => ({ weekStart: s.weekStart, reviews: s.reviews, rating: s.rating ?? 0, saves: s.saves ?? 0 })),
     viral: [...viralMap.values()].map(({ keywords, ...v }) => ({ ...v, topKeywords: keywords.size })),
+    videos: videos.map((v) => ({
+      client: v.client,
+      id: v.videoId,
+      title: v.title,
+      publishedOn: seoulDate(v.publishedAt),
+      views: v.views,
+      likes: v.likes,
+      comments: v.comments,
+      isShort: v.isShort === 1,
+    })),
     sns: sns.map((s) => ({ client: s.client, platform: s.platform, weekStart: s.weekStart, followers: s.followers, views: s.views })),
   };
 

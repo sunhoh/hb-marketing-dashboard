@@ -15,6 +15,13 @@
       "when": 1793087196541,
       "tag": "0001_sns_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793088059601,
+      "tag": "0002_youtube_videos",
+      "breakpoints": true
     }
   ]
 }

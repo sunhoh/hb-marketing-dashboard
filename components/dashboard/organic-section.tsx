@@ -184,9 +184,54 @@ function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
   );
 }
 
+function YoutubeCard({ youtube, compareLabel }: { youtube: NonNullable<Metrics["organic"]["youtube"]>; compareLabel: string }) {
+  return (
+    <Section title="유튜브 영상" description={`기간 내 업로드 · ${compareLabel} · 누적 조회수 순`}>
+      <div className="grid grid-cols-2 gap-2">
+        <Stat
+          label="업로드"
+          value={`${formatNumber(youtube.uploads)}개`}
+          delta={<CountDelta value={youtube.uploads - youtube.previousUploads} unit="개" />}
+        />
+        <Stat label="그중 쇼츠" value={`${formatNumber(youtube.shorts)}개`} delta={<span className="text-subtle">3분 이하 영상</span>} />
+      </div>
+      {youtube.top.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState>이 기간에 올린 영상이 없어요</EmptyState>
+        </div>
+      ) : (
+        <ol className="mt-3 divide-y divide-border">
+          {youtube.top.map((v, i) => (
+            <li key={v.id} className="flex items-start gap-3 py-2.5">
+              <span className="tabular w-4 shrink-0 pt-0.5 text-t7 font-bold text-subtle">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <a
+                  href={`https://youtu.be/${v.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="line-clamp-2 text-t7 font-semibold text-foreground hover:underline"
+                >
+                  {v.title}
+                </a>
+                <p className="tabular mt-0.5 text-st12 text-subtle">
+                  {shortDate(v.publishedOn)}
+                  {v.isShort && " · 쇼츠"}
+                  {v.likes !== null && ` · 좋아요 ${formatNumber(v.likes)}`}
+                  {v.comments !== null && ` · 댓글 ${formatNumber(v.comments)}`}
+                </p>
+              </div>
+              <span className="tabular shrink-0 pt-0.5 text-t7 font-bold text-foreground">{formatNumber(v.views)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Section>
+  );
+}
+
 export function OrganicSection({ data }: { data: Metrics }) {
-  const { place, viral, sns } = data.organic;
-  const empty = !place && !viral && sns.length === 0;
+  const { place, viral, sns, youtube } = data.organic;
+  const empty = !place && !viral && sns.length === 0 && !youtube;
 
   return (
     <div className="min-w-0">
@@ -202,6 +247,7 @@ export function OrganicSection({ data }: { data: Metrics }) {
           {place && <PlaceCard place={place} compareLabel={data.compareLabel} />}
           {viral && <ViralCard viral={viral} />}
           {sns.length > 0 && <SnsCard sns={sns} />}
+          {youtube && <YoutubeCard youtube={youtube} compareLabel={data.compareLabel} />}
         </div>
       )}
     </div>

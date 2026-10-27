@@ -36,6 +36,18 @@ export type SnsStat = {
   views: number | null; // 모르면 null (유튜브 첫 주 등)
 };
 
+/** 유튜브 영상(공개 정보). views 등은 동기화 때의 누적값 */
+export type VideoStat = {
+  client: ClientSlug;
+  id: string;
+  title: string;
+  publishedOn: string; // YYYY-MM-DD (서울)
+  views: number;
+  likes: number | null;
+  comments: number | null;
+  isShort: boolean;
+};
+
 export type Totals = {
   spend: number;
   impressions: number;
