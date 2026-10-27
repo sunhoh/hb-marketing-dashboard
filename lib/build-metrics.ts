@@ -5,7 +5,6 @@ import { CHANNEL_LABELS, CLIENTS, CONVERSION_LABELS } from "./clients";
 import { cpc, ctr, deriveAll, sumTotals, type DerivedTotals } from "./metrics";
 import { addDays, PERIODS, resolvePeriod } from "./periods";
 import type {
-  ClientFilter,
   ClientSlug,
   Creative,
   PeriodKey,
@@ -64,8 +63,8 @@ export type Metrics = ReturnType<typeof buildMetrics> & { lastSyncedAt: string |
 
 const clientName = (slug: ClientSlug) => CLIENTS.find((c) => c.slug === slug)?.name ?? slug;
 
-function byClient<T extends { client: ClientSlug }>(rows: T[], client: ClientFilter) {
-  return client === "all" ? rows : rows.filter((r) => r.client === client);
+function byClient<T extends { client: ClientSlug }>(rows: T[], client: ClientSlug) {
+  return rows.filter((r) => r.client === client);
 }
 
 function inWeeks<T extends { weekStart: string }>(rows: T[], weeks: string[]) {
@@ -82,7 +81,7 @@ function groupBy<T>(rows: T[], key: (r: T) => string) {
   return map;
 }
 
-export function buildMetrics(ds: Dataset, client: ClientFilter, period: PeriodKey) {
+export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey) {
   const periodInfo = PERIODS.find((p) => p.key === period)!;
   const weeks = resolvePeriod(period, ds.weeks, ds.today);
   const lastWeek = weeks.current[weeks.current.length - 1];
@@ -159,7 +158,7 @@ export function buildMetrics(ds: Dataset, client: ClientFilter, period: PeriodKe
   }
 
   // 오가닉
-  const showPlace = client === "all" || client === "gu-ilsan";
+  const showPlace = client === "gu-ilsan";
   const prevLastWeek = weeks.previous[weeks.previous.length - 1];
   const placeAt = (w: string | undefined) => ds.placeStats.find((s) => s.weekStart === w);
   const placeCurrent = placeAt(lastWeek);
@@ -190,11 +189,6 @@ export function buildMetrics(ds: Dataset, client: ClientFilter, period: PeriodKe
     ? {
         current: sumViral(inWeeks(viralRows, weeks.current)),
         previous: sumViral(inWeeks(viralRows, weeks.previous)),
-        byClient: [...groupBy(inWeeks(viralRows, weeks.current), (r) => r.client)].map(([slug, rows]) => ({
-          client: slug as ClientSlug,
-          clientName: clientName(slug as ClientSlug),
-          ...sumViral(rows),
-        })),
       }
     : null;
 

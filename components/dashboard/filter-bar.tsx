@@ -4,13 +4,10 @@ import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CLIENTS } from "@/lib/clients";
 import { PERIODS, isPeriodKey } from "@/lib/periods";
-import type { ClientFilter, PeriodKey } from "@/lib/types";
+import type { ClientSlug, PeriodKey } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const CLIENT_OPTIONS: { value: ClientFilter; label: string; href: string }[] = [
-  { value: "all", label: "전체", href: "/" },
-  ...CLIENTS.map((c) => ({ value: c.slug, label: c.name, href: `/clients/${c.slug}` })),
-];
+const CLIENT_OPTIONS = CLIENTS.map((c) => ({ value: c.slug, label: c.name, href: `/clients/${c.slug}` }));
 
 export function FilterBar({
   client,
@@ -18,9 +15,9 @@ export function FilterBar({
   onClientSelect,
   onPeriodChange,
 }: {
-  client: ClientFilter;
+  client: ClientSlug;
   period: PeriodKey;
-  onClientSelect: (client: ClientFilter) => void;
+  onClientSelect: (client: ClientSlug) => void;
   onPeriodChange: (period: PeriodKey) => void;
 }) {
   return (

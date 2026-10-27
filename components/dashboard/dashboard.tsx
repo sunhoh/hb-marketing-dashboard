@@ -2,13 +2,12 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { getClient } from "@/lib/clients";
 import type { Metrics } from "@/lib/build-metrics";
 import { shortDate } from "@/lib/periods";
-import type { ClientFilter, PeriodKey } from "@/lib/types";
-import { readStoredClient, usePreferences } from "@/lib/use-preferences";
+import type { ClientSlug, PeriodKey } from "@/lib/types";
+import { usePreferences } from "@/lib/use-preferences";
 import { ChannelTable } from "./channel-table";
 import { CreativeRanking } from "./creative-ranking";
 import { FilterBar } from "./filter-bar";
@@ -16,7 +15,7 @@ import { OrganicSection } from "./organic-section";
 import { SummaryCards } from "./summary-cards";
 import { TrendChart } from "./trend-chart";
 
-async function fetchMetrics(client: ClientFilter, period: PeriodKey): Promise<Metrics> {
+async function fetchMetrics(client: ClientSlug, period: PeriodKey): Promise<Metrics> {
   const res = await fetch(`/api/metrics?${new URLSearchParams({ client, period })}`);
   if (!res.ok) throw new Error(`metrics ${res.status}`);
   return res.json();
@@ -36,25 +35,13 @@ function formatSyncedAt(iso: string) {
   return `${get("month")}.${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
-// 새로고침 직후 첫 화면에서만 마지막 클라이언트로 돌려놓는다(뒤로 가기로 '/'에 왔을 때 다시 끌려가지 않게)
-let restoreChecked = false;
-
-export function Dashboard({ client }: { client: ClientFilter }) {
-  const router = useRouter();
+export function Dashboard({ client }: { client: ClientSlug }) {
   const { period, setPeriod, setClient } = usePreferences();
-  const info = client === "all" ? null : getClient(client);
+  const info = getClient(client)!;
 
   useEffect(() => {
-    if (!restoreChecked) {
-      restoreChecked = true;
-      const last = readStoredClient();
-      if (client === "all" && last && last !== "all") {
-        router.replace(`/clients/${last}`);
-        return;
-      }
-    }
     setClient(client);
-  }, [client, router, setClient]);
+  }, [client, setClient]);
 
   const { data, isError } = useQuery({
     queryKey: ["metrics", client, period],
@@ -66,7 +53,7 @@ export function Dashboard({ client }: { client: ClientFilter }) {
     <div className="mx-auto w-full max-w-[1280px] px-4 pb-16 sm:px-6 lg:px-8">
       <header className="pt-6 pb-4 sm:pt-8">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/" onClick={() => setClient("all")} className="text-t7 font-semibold text-subtle hover:text-body">
+          <Link href="/" className="text-t7 font-semibold text-subtle hover:text-body">
             힐링브리즈 마케팅 대시보드
           </Link>
           {data?.source === "sample" && (
@@ -81,10 +68,10 @@ export function Dashboard({ client }: { client: ClientFilter }) {
           )}
         </div>
         <h1 className="mt-1.5 text-t2 font-bold text-foreground sm:text-t1">
-          {info ? info.fullName : "전체 클라이언트"}
+          {info.fullName}
         </h1>
         <p className="mt-1 text-t6 text-body">
-          {info ? info.description : "GU강남 · GU일산 · 루호 · 셀로라 매체 지표 합계"}
+          {info.description}
           {data && (
             <span className="tabular text-subtle">
               {" "}
@@ -105,10 +92,10 @@ export function Dashboard({ client }: { client: ClientFilter }) {
         <main className="mt-3 flex flex-col gap-3">
           <SummaryCards data={data} isSms={client === "cellora"} />
           <TrendChart data={data} />
-          <ChannelTable data={data} showClient={client === "all"} />
-          <CreativeRanking data={data} showClient={client === "all"} />
+          <ChannelTable data={data} />
+          <CreativeRanking data={data} />
           <div className="mt-5">
-            <OrganicSection data={data} showClient={client === "all"} />
+            <OrganicSection data={data} />
           </div>
           <p className="mt-6 px-1 text-st12 text-subtle">
             {data.source === "sample" ? "샘플 데이터 기준일" : "기준일"} {data.asOf} · 주 시작일(월요일)이 속한 달로 기간을 나눠요 · CRM 지표(DB·상담·예약·매출)는

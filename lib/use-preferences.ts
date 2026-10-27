@@ -3,12 +3,12 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { isClientSlug } from "./clients";
 import { isPeriodKey } from "./periods";
-import type { ClientFilter, PeriodKey } from "./types";
+import type { ClientSlug, PeriodKey } from "./types";
 
 const KEY = "marketing-dashboard:filters";
 export const DEFAULT_PERIOD: PeriodKey = "this-month";
 
-type Stored = { client?: ClientFilter; period?: PeriodKey };
+type Stored = { client?: ClientSlug; period?: PeriodKey };
 
 const listeners = new Set<() => void>();
 let cachedRaw: string | null | undefined;
@@ -26,7 +26,7 @@ function read(): Stored {
   try {
     const parsed = raw ? (JSON.parse(raw) as Stored) : {};
     cachedValue = {
-      client: parsed.client === "all" || isClientSlug(parsed.client) ? parsed.client : undefined,
+      client: isClientSlug(parsed.client) ? parsed.client : undefined,
       period: isPeriodKey(parsed.period) ? parsed.period : undefined,
     };
   } catch {
@@ -64,6 +64,6 @@ const serverSnapshot: Stored = {};
 export function usePreferences() {
   const stored = useSyncExternalStore(subscribe, read, () => serverSnapshot);
   const setPeriod = useCallback((period: PeriodKey) => write({ period }), []);
-  const setClient = useCallback((client: ClientFilter) => write({ client }), []);
+  const setClient = useCallback((client: ClientSlug) => write({ client }), []);
   return { period: stored.period ?? DEFAULT_PERIOD, setPeriod, setClient };
 }

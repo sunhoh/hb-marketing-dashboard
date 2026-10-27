@@ -47,7 +47,7 @@ const numericSort: SortFn<typeof features, ChannelRow> = (a, b, id) => {
   return x - y;
 };
 
-export function ChannelTable({ data, showClient }: { data: Metrics; showClient: boolean }) {
+export function ChannelTable({ data }: { data: Metrics }) {
   const columns = useMemo<Col[]>(() => {
     const num = (key: NumericKey, header: string, format: (v: number | null) => string): Col => ({
       id: key,
@@ -59,9 +59,6 @@ export function ChannelTable({ data, showClient }: { data: Metrics; showClient: 
       meta: { numeric: true, flag: key === "ctr" || key === "cpc" || key === "cpm" ? key : undefined },
     });
     return [
-      ...(showClient
-        ? [{ id: "client", accessorFn: (r) => r.clientName, header: "클라이언트", sortFn: "text" } satisfies Col]
-        : []),
       {
         id: "channel",
         accessorFn: (r) => `${r.channelLabel} ${r.segment ?? ""}`,
@@ -98,7 +95,7 @@ export function ChannelTable({ data, showClient }: { data: Metrics; showClient: 
         ),
       },
     ];
-  }, [showClient]);
+  }, []);
 
   const table = useTable({
     features,

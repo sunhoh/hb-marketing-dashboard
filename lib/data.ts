@@ -4,9 +4,9 @@
  */
 import "server-only";
 import { buildMetrics, type Metrics } from "./build-metrics";
-import type { ClientFilter, PeriodKey } from "./types";
+import type { ClientSlug, PeriodKey } from "./types";
 
-export async function getMetrics(client: ClientFilter, period: PeriodKey): Promise<Metrics> {
+export async function getMetrics(client: ClientSlug, period: PeriodKey): Promise<Metrics> {
   if (process.env.DATA_SOURCE === "db") {
     const { loadDbDataset } = await import("@/db/dataset");
     const { dataset, lastSyncedAt } = await loadDbDataset();

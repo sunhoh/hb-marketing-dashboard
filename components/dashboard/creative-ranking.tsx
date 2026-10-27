@@ -57,22 +57,16 @@ function CreativeItem({ row, rankBy }: { row: CreativeRow; rankBy: RankBy }) {
   );
 }
 
-export function CreativeRanking({ data, showClient }: { data: Metrics; showClient: boolean }) {
+export function CreativeRanking({ data }: { data: Metrics }) {
   const [rankBy, setRankBy] = useState<RankBy>("ctr");
-  const groups = [...new Set(data.creatives.map((c) => c.client))].map((client) => ({
-    client,
-    name: data.creatives.find((c) => c.client === client)!.clientName,
-    rows: data.creatives
-      .filter((c) => c.client === client)
-      .sort((a, b) => (rankBy === "ctr" ? a.ctrRank - b.ctrRank : a.cpcRank - b.cpcRank)),
-  }));
+  const rows = [...data.creatives].sort((a, b) => (rankBy === "ctr" ? a.ctrRank - b.ctrRank : a.cpcRank - b.cpcRank));
 
   return (
     <Section
       title="메타 소재별 성과"
       description={`CTR이 소재 평균의 ${OFF_CTR_RATIO * 100}% 미만이거나 CPC가 ${OFF_CPC_RATIO * 100}% 초과면 OFF 후보`}
       action={
-        groups.length > 0 && (
+        rows.length > 0 && (
           <Tabs value={rankBy} onValueChange={(v) => setRankBy(v as RankBy)}>
             <TabsList aria-label="순위 기준" className="h-9! rounded-lg bg-surface p-0.5">
               {(["ctr", "cpc"] as const).map((k) => (
@@ -89,25 +83,18 @@ export function CreativeRanking({ data, showClient }: { data: Metrics; showClien
         )
       }
     >
-      {groups.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState>
           {data.client === "gu-ilsan" || data.client === "cellora"
             ? "이 클라이언트는 메타 소재 광고를 운영하지 않아요"
             : "선택한 기간에 소재 데이터가 없어요"}
         </EmptyState>
       ) : (
-        <div className="grid gap-x-8 gap-y-4 xl:grid-cols-2">
-          {groups.map((g) => (
-            <div key={g.client} className="min-w-0">
-              {showClient && <h3 className="mb-1 text-t7 font-semibold text-body">{g.name}</h3>}
-              <ol className="divide-y divide-border">
-                {g.rows.map((row) => (
-                  <CreativeItem key={row.id} row={row} rankBy={rankBy} />
-                ))}
-              </ol>
-            </div>
+        <ol className="divide-y divide-border">
+          {rows.map((row) => (
+            <CreativeItem key={row.id} row={row} rankBy={rankBy} />
           ))}
-        </div>
+        </ol>
       )}
     </Section>
   );

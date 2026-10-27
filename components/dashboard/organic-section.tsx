@@ -128,7 +128,7 @@ function CountDeltaDecimal({ value }: { value: number }) {
   );
 }
 
-function ViralCard({ viral, showClient }: { viral: NonNullable<Metrics["organic"]["viral"]>; showClient: boolean }) {
+function ViralCard({ viral }: { viral: NonNullable<Metrics["organic"]["viral"]> }) {
   return (
     <Section title="바이럴" description="블로그·카페 발행과 상위노출 키워드">
       <div className="grid grid-cols-2 gap-2">
@@ -143,23 +143,11 @@ function ViralCard({ viral, showClient }: { viral: NonNullable<Metrics["organic"
           delta={<Delta metric="clicks" rate={changeRate(viral.current.topKeywords, viral.previous.topKeywords)} />}
         />
       </div>
-      {showClient && viral.byClient.length > 1 && (
-        <ul className="mt-3 divide-y divide-border text-t7">
-          {viral.byClient.map((v) => (
-            <li key={v.client} className="tabular flex justify-between py-2">
-              <span className="text-body">{v.clientName}</span>
-              <span className="text-foreground">
-                발행 <b>{v.published}</b> · 상위노출 <b>{v.topKeywords}</b>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
     </Section>
   );
 }
 
-function SnsCard({ sns, showClient }: { sns: Metrics["organic"]["sns"]; showClient: boolean }) {
+function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
   return (
     <Section title="SNS" description="기간 말 팔로워와 기간 내 조회수">
       <ul className="divide-y divide-border">
@@ -167,7 +155,6 @@ function SnsCard({ sns, showClient }: { sns: Metrics["organic"]["sns"]; showClie
           <li key={`${s.client}-${s.platform}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3">
             <div className="min-w-0">
               <p className="text-t6 font-semibold text-foreground">{PLATFORM_LABELS[s.platform]}</p>
-              {showClient && <p className="text-st12 text-subtle">{s.clientName}</p>}
             </div>
             <dl className="tabular grid grid-cols-2 gap-x-5 text-right text-t7">
               <div>
@@ -191,7 +178,7 @@ function SnsCard({ sns, showClient }: { sns: Metrics["organic"]["sns"]; showClie
   );
 }
 
-export function OrganicSection({ data, showClient }: { data: Metrics; showClient: boolean }) {
+export function OrganicSection({ data }: { data: Metrics }) {
   const { place, viral, sns } = data.organic;
   const empty = !place && !viral && sns.length === 0;
 
@@ -207,8 +194,8 @@ export function OrganicSection({ data, showClient }: { data: Metrics; showClient
       ) : (
         <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3">
           {place && <PlaceCard place={place} compareLabel={data.compareLabel} />}
-          {viral && <ViralCard viral={viral} showClient={showClient} />}
-          {sns.length > 0 && <SnsCard sns={sns} showClient={showClient} />}
+          {viral && <ViralCard viral={viral} />}
+          {sns.length > 0 && <SnsCard sns={sns} />}
         </div>
       )}
     </div>

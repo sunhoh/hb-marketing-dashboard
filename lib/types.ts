@@ -1,5 +1,4 @@
 export type ClientSlug = "gu-gangnam" | "gu-ilsan" | "luho" | "cellora";
-export type ClientFilter = ClientSlug | "all";
 export type PeriodKey = "this-month" | "last-month" | "last-12-weeks";
 
 /** 매체 원본 레코드 — 파생 지표(CTR·CPC·CPM)는 저장하지 않는다 */
