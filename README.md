@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 마케팅 대시보드
 
-## Getting Started
+힐링브리즈 마케팅팀 내부 대시보드. 작업 지시서는 `CLAUDE.md`.
 
-First, run the development server:
+## 실행
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run db:start   # 로컬 Postgres 켜기 (프로젝트 안 .data/postgres, 5433 포트)
+npm run dev        # 화면
+npm run db:stop    # 로컬 Postgres 끄기
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 데이터
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| 명령 | 하는 일 |
+|---|---|
+| `npm run sync` | 구글 시트 "마케팅 대시보드" → DB |
+| `npm run db:migrate` | 스키마(`db/schema.ts`) 변경을 DB에 적용 (`db:generate` 로 마이그레이션 생성 후) |
+| `npm run db:sample` | 샘플 데이터를 DB에 넣기 (`-- --clear` 로 지우기). DB 경로 확인용 |
+| `npm run sheet:template` | 시트 입력 양식(xlsx) 다시 만들기 |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`.env.local` (git 제외)
 
-## Learn More
+| 키 | 값 |
+|---|---|
+| `DATA_SOURCE` | `db` = DB를 읽음, `sample` = 샘플 화면 |
+| `DATABASE_URL` | 로컬은 `postgres://dashboard@localhost:5433/marketing`, 배포 시 Supabase 주소 |
+| `GOOGLE_SHEET_ID` | 입력 시트 ID |
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+서비스 계정 키는 `.secrets/google-service-account.json` (git 제외, 배포 시 `GOOGLE_SERVICE_ACCOUNT_JSON` 환경변수).

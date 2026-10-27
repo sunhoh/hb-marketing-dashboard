@@ -18,7 +18,7 @@ import {
 import type { ClientSlug } from "@/lib/types";
 
 /** 데이터가 어디서 왔는지 — 화면의 "연결 끊김" 경고와 디버깅에 쓴다 */
-export type Source = "meta_api" | "naver_api" | "instagram_api" | "sheet";
+export type Source = "meta_api" | "naver_api" | "instagram_api" | "sheet" | "sample";
 
 const client = () => text("client").$type<ClientSlug>().notNull();
 const source = () => text("source").$type<Source>().notNull();

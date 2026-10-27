@@ -1,4 +1,4 @@
-import type { Metrics } from "@/lib/data";
+import type { Metrics } from "@/lib/build-metrics";
 import { changeRate, formatNumber, formatPercent, formatWon, type MetricKey } from "@/lib/metrics";
 import { Delta } from "./primitives";
 

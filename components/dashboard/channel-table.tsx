@@ -13,7 +13,7 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BASELINE_TOLERANCE, type ChannelRow, type Metrics } from "@/lib/data";
+import { BASELINE_TOLERANCE, type ChannelRow, type Metrics } from "@/lib/build-metrics";
 import { formatNumber, formatPercent, formatWon } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { EmptyState, Section } from "./primitives";

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OFF_CPC_RATIO, OFF_CTR_RATIO, type CreativeRow, type Metrics } from "@/lib/data";
+import { OFF_CPC_RATIO, OFF_CTR_RATIO, type CreativeRow, type Metrics } from "@/lib/build-metrics";
 import { formatNumber, formatPercent, formatWon } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { EmptyState, Section } from "./primitives";
@@ -90,7 +90,11 @@ export function CreativeRanking({ data, showClient }: { data: Metrics; showClien
       }
     >
       {groups.length === 0 ? (
-        <EmptyState>이 클라이언트는 메타 소재 광고를 운영하지 않아요</EmptyState>
+        <EmptyState>
+          {data.client === "gu-ilsan" || data.client === "cellora"
+            ? "이 클라이언트는 메타 소재 광고를 운영하지 않아요"
+            : "선택한 기간에 소재 데이터가 없어요"}
+        </EmptyState>
       ) : (
         <div className="grid gap-x-8 gap-y-4 xl:grid-cols-2">
           {groups.map((g) => (

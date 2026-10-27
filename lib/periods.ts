@@ -47,3 +47,15 @@ export function addDays(iso: string, days: number) {
 export function shortDate(iso: string) {
   return `${iso.slice(5, 7)}.${iso.slice(8, 10)}`;
 }
+
+/** iso 날짜가 속한 주의 월요일 */
+export function mondayOf(iso: string) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return addDays(iso, -((d.getUTCDay() + 6) % 7));
+}
+
+/** today 가 속한 주까지 거꾸로 count 주의 월요일(오래된 순) */
+export function weeksUntil(today: string, count: number) {
+  const last = mondayOf(today);
+  return Array.from({ length: count }, (_, i) => addDays(last, (i - count + 1) * 7));
+}

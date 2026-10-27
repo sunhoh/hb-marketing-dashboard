@@ -2,7 +2,7 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PLATFORM_LABELS } from "@/lib/clients";
-import type { Metrics } from "@/lib/data";
+import type { Metrics } from "@/lib/build-metrics";
 import { changeRate, EMPTY, formatNumber } from "@/lib/metrics";
 import { shortDate } from "@/lib/periods";
 import { useThemeColors } from "@/lib/use-theme-colors";
@@ -200,7 +200,9 @@ export function OrganicSection({ data, showClient }: { data: Metrics; showClient
       <h2 className="mb-3 px-1 text-t4 font-bold text-foreground">오가닉 · 플레이스</h2>
       {empty ? (
         <div className="rounded-card bg-card p-5">
-          <EmptyState>이 클라이언트는 오가닉 채널 데이터가 없어요</EmptyState>
+          <EmptyState>
+            {data.client === "cellora" ? "이 클라이언트는 오가닉 채널 데이터가 없어요" : "선택한 기간에 오가닉 데이터가 없어요"}
+          </EmptyState>
         </div>
       ) : (
         <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3">

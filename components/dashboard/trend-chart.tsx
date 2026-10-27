@@ -13,7 +13,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
-import type { Metrics } from "@/lib/data";
+import type { Metrics } from "@/lib/build-metrics";
 import { formatPercent, formatWon, formatWonShort } from "@/lib/metrics";
 import { addDays, shortDate } from "@/lib/periods";
 import { useIsNarrow, useThemeColors } from "@/lib/use-theme-colors";

@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { getClient } from "@/lib/clients";
-import { getMetrics } from "@/lib/data";
+import type { Metrics } from "@/lib/build-metrics";
 import { shortDate } from "@/lib/periods";
-import type { ClientFilter } from "@/lib/types";
+import type { ClientFilter, PeriodKey } from "@/lib/types";
 import { readStoredClient, usePreferences } from "@/lib/use-preferences";
 import { ChannelTable } from "./channel-table";
 import { CreativeRanking } from "./creative-ranking";
@@ -15,6 +15,26 @@ import { FilterBar } from "./filter-bar";
 import { OrganicSection } from "./organic-section";
 import { SummaryCards } from "./summary-cards";
 import { TrendChart } from "./trend-chart";
+
+async function fetchMetrics(client: ClientFilter, period: PeriodKey): Promise<Metrics> {
+  const res = await fetch(`/api/metrics?${new URLSearchParams({ client, period })}`);
+  if (!res.ok) throw new Error(`metrics ${res.status}`);
+  return res.json();
+}
+
+/** "10.27 14:05" (서울 시간) */
+function formatSyncedAt(iso: string) {
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("month")}.${get("day")} ${get("hour")}:${get("minute")}`;
+}
 
 // 새로고침 직후 첫 화면에서만 마지막 클라이언트로 돌려놓는다(뒤로 가기로 '/'에 왔을 때 다시 끌려가지 않게)
 let restoreChecked = false;
@@ -38,7 +58,7 @@ export function Dashboard({ client }: { client: ClientFilter }) {
 
   const { data, isError } = useQuery({
     queryKey: ["metrics", client, period],
-    queryFn: () => getMetrics(client, period),
+    queryFn: () => fetchMetrics(client, period),
     placeholderData: keepPreviousData,
   });
 
@@ -49,9 +69,16 @@ export function Dashboard({ client }: { client: ClientFilter }) {
           <Link href="/" onClick={() => setClient("all")} className="text-t7 font-semibold text-subtle hover:text-body">
             힐링브리즈 마케팅 대시보드
           </Link>
-          <span className="inline-flex h-6 items-center rounded-md bg-warn-bg px-2 text-st12 font-bold text-warn-fg">
-            샘플 데이터
-          </span>
+          {data?.source === "sample" && (
+            <span className="inline-flex h-6 items-center rounded-md bg-warn-bg px-2 text-st12 font-bold text-warn-fg">
+              샘플 데이터
+            </span>
+          )}
+          {data?.source === "db" && (
+            <span className="tabular inline-flex h-6 items-center rounded-md bg-surface px-2 text-st12 font-semibold text-body">
+              {data.lastSyncedAt ? `마지막 동기화 ${formatSyncedAt(data.lastSyncedAt)}` : "아직 동기화 기록이 없어요"}
+            </span>
+          )}
         </div>
         <h1 className="mt-1.5 text-t2 font-bold text-foreground sm:text-t1">
           {info ? info.fullName : "전체 클라이언트"}
@@ -61,7 +88,8 @@ export function Dashboard({ client }: { client: ClientFilter }) {
           {data && (
             <span className="tabular text-subtle">
               {" "}
-              · {data.periodLabel} {shortDate(data.range.start)} ~ {shortDate(data.range.end)}
+              · {data.periodLabel}
+              {data.range.start && data.range.end && ` ${shortDate(data.range.start)} ~ ${shortDate(data.range.end)}`}
             </span>
           )}
         </p>
@@ -83,7 +111,7 @@ export function Dashboard({ client }: { client: ClientFilter }) {
             <OrganicSection data={data} showClient={client === "all"} />
           </div>
           <p className="mt-6 px-1 text-st12 text-subtle">
-            샘플 데이터 기준일 {data.sampleToday} · 주 시작일(월요일)이 속한 달로 기간을 나눠요 · CRM 지표(DB·상담·예약·매출)는
+            {data.source === "sample" ? "샘플 데이터 기준일" : "기준일"} {data.asOf} · 주 시작일(월요일)이 속한 달로 기간을 나눠요 · CRM 지표(DB·상담·예약·매출)는
             2단계에서 연결합니다
           </p>
         </main>

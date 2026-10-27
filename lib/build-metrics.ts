@@ -1,0 +1,234 @@
+/**
+ * 원본 레코드(Dataset) → 화면용 지표. 출처(샘플·DB)와 무관한 순수 계산이라 브라우저에서도 import 할 수 있다.
+ */
+import { CHANNEL_LABELS, CLIENTS, CONVERSION_LABELS } from "./clients";
+import { cpc, ctr, deriveAll, sumTotals, type DerivedTotals } from "./metrics";
+import { addDays, PERIODS, resolvePeriod } from "./periods";
+import type {
+  ClientFilter,
+  ClientSlug,
+  Creative,
+  PeriodKey,
+  PlaceKeywordRank,
+  PlaceStat,
+  SnsStat,
+  ViralStat,
+  WeeklyMetric,
+} from "./types";
+
+/** 출처별 로더가 채우는 원본 묶음 */
+export type Dataset = {
+  source: "sample" | "db";
+  today: string; // 기준일 YYYY-MM-DD
+  weeks: string[]; // today 가 속한 주까지의 월요일(오래된 순)
+  weekly: WeeklyMetric[]; // 채널·세그먼트 단위
+  creatives: Creative[];
+  creativeWeekly: WeeklyMetric[]; // 소재 단위, segment = 소재 ID
+  placeKeywords: string[];
+  placeRanks: PlaceKeywordRank[];
+  placeStats: PlaceStat[];
+  viral: ViralStat[];
+  sns: SnsStat[];
+};
+
+/** 채널 표에서 '기준보다 나쁨'으로 칠하는 문턱 (기준 = 같은 클라이언트의 기간 전체 값) */
+export const BASELINE_TOLERANCE = 0.2;
+/** 소재 OFF 후보 문턱 (기준 = 같은 클라이언트 메타 소재 전체 값) */
+export const OFF_CTR_RATIO = 0.7;
+export const OFF_CPC_RATIO = 1.3;
+const OFF_MIN_IMPRESSIONS = 5_000;
+
+export type ChannelRow = DerivedTotals & {
+  id: string;
+  client: ClientSlug;
+  clientName: string;
+  channel: string;
+  channelLabel: string;
+  segment?: string;
+  conversionLabel: string;
+  baseline: { ctr: number | null; cpc: number | null; cpm: number | null };
+};
+
+export type CreativeRow = DerivedTotals & {
+  id: string;
+  client: ClientSlug;
+  clientName: string;
+  name: string;
+  format: string;
+  ctrRank: number;
+  cpcRank: number;
+  offReasons: string[];
+};
+
+export type Metrics = ReturnType<typeof buildMetrics> & { lastSyncedAt: string | null };
+
+const clientName = (slug: ClientSlug) => CLIENTS.find((c) => c.slug === slug)?.name ?? slug;
+
+function byClient<T extends { client: ClientSlug }>(rows: T[], client: ClientFilter) {
+  return client === "all" ? rows : rows.filter((r) => r.client === client);
+}
+
+function inWeeks<T extends { weekStart: string }>(rows: T[], weeks: string[]) {
+  const set = new Set(weeks);
+  return rows.filter((r) => set.has(r.weekStart));
+}
+
+function groupBy<T>(rows: T[], key: (r: T) => string) {
+  const map = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    map.set(k, [...(map.get(k) ?? []), r]);
+  }
+  return map;
+}
+
+export function buildMetrics(ds: Dataset, client: ClientFilter, period: PeriodKey) {
+  const periodInfo = PERIODS.find((p) => p.key === period)!;
+  const weeks = resolvePeriod(period, ds.weeks, ds.today);
+  const lastWeek = weeks.current[weeks.current.length - 1];
+  const rangeStart = weeks.current[0] ?? null;
+  const rangeEnd = lastWeek ? (addDays(lastWeek, 6) > ds.today ? ds.today : addDays(lastWeek, 6)) : null;
+
+  const metrics = byClient(ds.weekly, client);
+  const current = inWeeks(metrics, weeks.current);
+  const previous = inWeeks(metrics, weeks.previous);
+
+  // 요약 카드
+  const summary = deriveAll(sumTotals(current));
+  const summaryPrevious = deriveAll(sumTotals(previous));
+
+  // 주별 추이 — 항상 최근 12주, 선택 기간에 속한 주는 표시
+  const trendWeeks = ds.weeks.slice(-12);
+  const currentSet = new Set(weeks.current);
+  const weekly = trendWeeks.map((weekStart) => {
+    const t = sumTotals(metrics.filter((r) => r.weekStart === weekStart));
+    return { weekStart, inPeriod: currentSet.has(weekStart), spend: t.spend, ctr: ctr(t), cpc: cpc(t) };
+  });
+
+  // 채널·국가별 표
+  const clientBaselines = new Map(
+    [...groupBy(current, (r) => r.client)].map(([slug, rows]) => [slug, deriveAll(sumTotals(rows))]),
+  );
+  const channels: ChannelRow[] = [...groupBy(current, (r) => `${r.client}|${r.channel}|${r.segment ?? ""}`)].map(
+    ([id, rows]) => {
+      const { client: slug, channel, segment } = rows[0] as WeeklyMetric;
+      const base = clientBaselines.get(slug)!;
+      return {
+        id,
+        client: slug,
+        clientName: clientName(slug),
+        channel,
+        channelLabel: CHANNEL_LABELS[channel] ?? channel,
+        segment,
+        conversionLabel: CONVERSION_LABELS[channel] ?? "매체 전환",
+        baseline: { ctr: base.ctr, cpc: base.cpc, cpm: base.cpm },
+        ...deriveAll(sumTotals(rows)),
+      };
+    },
+  );
+
+  // 메타 소재
+  const creativeCurrent = inWeeks(byClient(ds.creativeWeekly, client), weeks.current);
+  const creatives: CreativeRow[] = [];
+  for (const [slug, rows] of groupBy(creativeCurrent, (r) => r.client)) {
+    const base = deriveAll(sumTotals(rows));
+    const perCreative = [...groupBy(rows, (r) => r.segment!)].map(([id, list]) => {
+      const meta = ds.creatives.find((c) => c.id === id) ?? { id, client: slug as ClientSlug, name: id, format: "—" };
+      return { meta, totals: deriveAll(sumTotals(list)) };
+    });
+    const byCtr = [...perCreative].sort((a, b) => (b.totals.ctr ?? -1) - (a.totals.ctr ?? -1));
+    const byCpc = [...perCreative].sort((a, b) => (a.totals.cpc ?? Infinity) - (b.totals.cpc ?? Infinity));
+    for (const { meta, totals } of byCtr) {
+      const offReasons: string[] = [];
+      if (totals.impressions >= OFF_MIN_IMPRESSIONS) {
+        if (totals.ctr !== null && base.ctr !== null && totals.ctr < base.ctr * OFF_CTR_RATIO) offReasons.push("CTR 낮음");
+        if (totals.cpc !== null && base.cpc !== null && totals.cpc > base.cpc * OFF_CPC_RATIO) offReasons.push("CPC 높음");
+      }
+      creatives.push({
+        id: meta.id,
+        client: slug as ClientSlug,
+        clientName: clientName(slug as ClientSlug),
+        name: meta.name,
+        format: meta.format,
+        ctrRank: byCtr.findIndex((c) => c.meta.id === meta.id) + 1,
+        cpcRank: byCpc.findIndex((c) => c.meta.id === meta.id) + 1,
+        offReasons,
+        ...totals,
+      });
+    }
+  }
+
+  // 오가닉
+  const showPlace = client === "all" || client === "gu-ilsan";
+  const prevLastWeek = weeks.previous[weeks.previous.length - 1];
+  const placeAt = (w: string | undefined) => ds.placeStats.find((s) => s.weekStart === w);
+  const placeCurrent = placeAt(lastWeek);
+  const place = showPlace && placeCurrent
+    ? {
+        keywords: ds.placeKeywords.map((keyword) => {
+          const rank = (w: string) => ds.placeRanks.find((r) => r.keyword === keyword && r.weekStart === w)?.rank ?? null;
+          return { keyword, rank: lastWeek ? rank(lastWeek) : null, previousRank: prevLastWeek ? rank(prevLastWeek) : null };
+        }),
+        rankTrend: trendWeeks.map((weekStart) => ({
+          weekStart,
+          ...Object.fromEntries(
+            ds.placeKeywords.map((k) => [k, ds.placeRanks.find((r) => r.keyword === k && r.weekStart === weekStart)?.rank]),
+          ),
+        })) as ({ weekStart: string } & Record<string, number>)[],
+        current: placeCurrent,
+        previous: prevLastWeek ? placeAt(prevLastWeek) ?? null : null,
+      }
+    : null;
+
+  const viralRows = byClient(ds.viral, client);
+  const sumViral = (rows: typeof viralRows) =>
+    rows.reduce((a, r) => ({ published: a.published + r.published, topKeywords: a.topKeywords + r.topKeywords }), {
+      published: 0,
+      topKeywords: 0,
+    });
+  const viral = viralRows.length
+    ? {
+        current: sumViral(inWeeks(viralRows, weeks.current)),
+        previous: sumViral(inWeeks(viralRows, weeks.previous)),
+        byClient: [...groupBy(inWeeks(viralRows, weeks.current), (r) => r.client)].map(([slug, rows]) => ({
+          client: slug as ClientSlug,
+          clientName: clientName(slug as ClientSlug),
+          ...sumViral(rows),
+        })),
+      }
+    : null;
+
+  const snsRows = byClient(ds.sns, client);
+  const sns = [...groupBy(snsRows, (r) => `${r.client}|${r.platform}`)].map(([, rows]) => {
+    const at = (w: string | undefined) => rows.find((r) => r.weekStart === w);
+    const sumViews = (ws: string[]) => inWeeks(rows, ws).reduce((a, r) => a + r.views, 0);
+    const first = rows[0] as SnsStat;
+    const end = at(lastWeek)?.followers ?? 0;
+    const startFollowers = at(prevLastWeek)?.followers ?? null;
+    return {
+      client: first.client,
+      clientName: clientName(first.client),
+      platform: first.platform,
+      followers: end,
+      followerChange: startFollowers === null ? null : end - startFollowers,
+      views: sumViews(weeks.current),
+      previousViews: sumViews(weeks.previous),
+    };
+  });
+
+  return {
+    client,
+    period,
+    periodLabel: periodInfo.label,
+    compareLabel: periodInfo.compareLabel,
+    source: ds.source,
+    range: { start: rangeStart, end: rangeEnd },
+    asOf: ds.today,
+    summary,
+    summaryPrevious,
+    weekly,
+    channels,
+    creatives,
+    organic: { place, viral, sns },
+  };
+}

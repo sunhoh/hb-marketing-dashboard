@@ -11,6 +11,7 @@ import type {
   ViralStat,
   WeeklyMetric,
 } from "@/lib/types";
+import type { Dataset } from "@/lib/build-metrics";
 
 /** 샘플 데이터의 '오늘'. 실제 날짜를 쓰면 서버·브라우저 렌더 값이 달라질 수 있어 고정한다. */
 export const SAMPLE_TODAY = "2026-10-27";
@@ -210,3 +211,17 @@ export const SNS_STATS: SnsStat[] = SNS_BASE.flatMap((s) => {
     return { client: s.client, platform: s.platform, weekStart, followers, views: round(s.views * jitter(0.35)) };
   });
 });
+
+export const SAMPLE_DATASET: Dataset = {
+  source: "sample",
+  today: SAMPLE_TODAY,
+  weeks: SAMPLE_WEEKS,
+  weekly: WEEKLY_METRICS,
+  creatives: CREATIVES,
+  creativeWeekly: CREATIVE_METRICS,
+  placeKeywords: PLACE_KEYWORDS,
+  placeRanks: PLACE_RANKS,
+  placeStats: PLACE_STATS,
+  viral: VIRAL_STATS,
+  sns: SNS_STATS,
+};
