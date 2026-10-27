@@ -27,10 +27,11 @@ async function naver() {
     return;
   }
   console.log("네이버 검색광고 가져오는 중…");
-  const { since, until, report } = await syncNaverSearchAd();
-  for (const r of report) {
-    console.log(`  ${name(r.client)} ${CHANNEL_LABELS["naver-place"]}: ${since} ~ ${until}, ${r.rows}일치`);
-    for (const s of r.skipped) console.log(`    · 가져오지 않은 캠페인(${s.type}) "${s.name}": ${formatWon(s.spend)}`);
+  const { since, until, rows, campaigns } = await syncNaverSearchAd();
+  console.log(`  ${since} ~ ${until}, ${rows}줄`);
+  for (const c of campaigns) {
+    const where = c.target ? `→ ${name(c.target.client)} · ${CHANNEL_LABELS[c.target.channel] ?? c.target.channel}` : "→ 가져오지 않음";
+    console.log(`    · ${c.name} (${c.type}${c.status === "PAUSED" ? ", 중지" : ""}) ${formatWon(c.spend)} ${where}`);
   }
 }
 

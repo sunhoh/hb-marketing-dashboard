@@ -27,6 +27,8 @@ export const CHANNEL_LABELS: Record<string, string> = {
   "gangnam-unni": "강남언니",
   creatrip: "크리에이트립",
   "naver-place": "네이버 플레이스 광고",
+  "naver-search": "네이버 파워링크",
+  "naver-brand": "네이버 브랜드검색",
   danggeun: "당근",
   "kakao-sms": "카톡·문자",
 };
@@ -37,6 +39,8 @@ export const CONVERSION_LABELS: Record<string, string> = {
   "gangnam-unni": "상담 신청",
   creatrip: "예약 문의",
   "naver-place": "전화·길찾기",
+  "naver-search": "전환",
+  "naver-brand": "전환",
   danggeun: "채팅 문의",
   "kakao-sms": "링크 전환",
 };
