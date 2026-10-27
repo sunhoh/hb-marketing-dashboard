@@ -2,6 +2,7 @@
  * 구글 시트 → DB 동기화. 시트가 원본이므로 source = "sheet" 인 행은 매번 시트 내용으로 통째로 교체한다
  * (시트에서 지운 줄은 DB 에서도 사라진다). API 로 들어온 행(meta_api 등)은 건드리지 않는다.
  */
+import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { JWT } from "google-auth-library";
 import { db } from "@/db";
@@ -12,14 +13,16 @@ import { parseSheet, type Cell } from "./sheet-parse";
 const SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
 const DEFAULT_KEY_FILE = ".secrets/google-service-account.json";
 
-/** 배포 환경은 GOOGLE_SERVICE_ACCOUNT_JSON(키 내용), 로컬은 키 파일 경로 */
+/**
+ * 배포 환경은 GOOGLE_SERVICE_ACCOUNT_JSON(키 내용), 로컬은 키 파일.
+ * JWT 의 keyFile 옵션은 v11 에서 이메일을 채우지 않아 "account not found" 가 나므로 직접 읽어 넘긴다.
+ */
 function auth() {
-  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (json) {
-    const key = JSON.parse(json) as { client_email: string; private_key: string };
-    return new JWT({ email: key.client_email, key: key.private_key, scopes: [SCOPE] });
-  }
-  return new JWT({ keyFile: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? DEFAULT_KEY_FILE, scopes: [SCOPE] });
+  const json =
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON ??
+    readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE ?? DEFAULT_KEY_FILE, "utf8");
+  const key = JSON.parse(json) as { client_email: string; private_key: string; private_key_id: string };
+  return new JWT({ email: key.client_email, key: key.private_key, keyId: key.private_key_id, scopes: [SCOPE] });
 }
 
 async function fetchTabs(sheetId: string): Promise<Record<string, Cell[][]>> {
