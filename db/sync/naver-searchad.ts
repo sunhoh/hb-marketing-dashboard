@@ -1,7 +1,8 @@
 /**
  * 네이버 검색광고 API → ad_metrics (일 단위, source = "naver_api").
- * 광고 계정 하나(gu_clinic)에 여러 지점 캠페인이 섞여 있어서, 캠페인 이름 규칙(CAMPAIGN_RULES)으로 클라이언트를 나눈다.
- * 규칙에 안 걸리는 캠페인은 가져오지 않고 이름·유형·금액만 알려 준다.
+ * 광고 계정 하나(gu_clinic)에 여러 지점이 섞여 있어서 이름 규칙(NAME_RULES)으로 클라이언트를 나눈다.
+ * 캠페인 이름에 지점이 없으면(예: "플레이스 검색광고") 광고그룹 이름으로 나눈다.
+ * 어느 규칙에도 안 걸리거나 제외 목록에 있으면 가져오지 않고 이름·유형·금액만 알려 준다.
  *
  * .env.local
  *   NAVER_SEARCHAD_API_KEY      엑세스라이선스
@@ -25,16 +26,15 @@ const CHANNEL_BY_CAMPAIGN_TYPE: Record<string, string> = {
   PLACE: "naver-place",
 };
 
-/**
- * 캠페인 이름 → 클라이언트. 위에서부터 처음 맞는 규칙을 쓴다.
- * "자사명 캠페인"은 어느 지점인지 정해지지 않아 일부러 규칙에 없다(가져오지 않음).
- */
-const CAMPAIGN_RULES: { match: RegExp; client: ClientSlug }[] = [
+/** 캠페인·광고그룹 이름 → 클라이언트. 위에서부터 처음 맞는 규칙을 쓴다 */
+const NAME_RULES: { match: RegExp; client: ClientSlug }[] = [
   { match: /일산/, client: "gu-ilsan" },
   { match: /강남/, client: "gu-gangnam" },
   { match: /셀로라/, client: "cellora" },
-  { match: /^플레이스 검색광고$/, client: "gu-ilsan" }, // 플레이스 광고는 GU일산만 운영(CLAUDE.md)
 ];
+
+/** 대시보드에 넣지 않는 캠페인(팀 결정) */
+const EXCLUDED_CAMPAIGNS = [/^자사명 캠페인$/];
 
 type Campaign = {
   nccCampaignId: string;
@@ -42,6 +42,18 @@ type Campaign = {
   campaignTp: string;
   status?: string;
 };
+type Adgroup = { nccAdgroupId: string; name: string; status?: string };
+
+/** 통계를 조회하는 단위. 캠페인 하나 또는 (캠페인 이름으로 못 나누면) 광고그룹 하나 */
+type Unit = {
+  id: string;
+  label: string;
+  type: string;
+  status?: string;
+  target: { client: ClientSlug; channel: string } | null;
+  excluded?: boolean;
+};
+
 type StatRow = {
   impCnt?: number;
   clkCnt?: number;
@@ -63,10 +75,8 @@ function config() {
   return { apiKey, secret, customerId };
 }
 
-function classify(c: Campaign) {
-  const client = CAMPAIGN_RULES.find((r) => r.match.test(c.name))?.client;
-  const channel = CHANNEL_BY_CAMPAIGN_TYPE[c.campaignTp];
-  return client && channel ? { client, channel } : null;
+function clientByName(name: string) {
+  return NAME_RULES.find((r) => r.match.test(name))?.client;
 }
 
 async function call<T>(
@@ -126,15 +136,56 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
 
   try {
     const campaigns = await call<Campaign[]>(cfg, customerId, "/ncc/campaigns");
-    // /stats 는 캠페인 하나씩만 받고, 기간을 주면 일별 행을 돌려준다
-    const statsById = new Map<string, StatRow[]>();
+
+    const units: Unit[] = [];
     for (const c of campaigns) {
+      const channel = CHANNEL_BY_CAMPAIGN_TYPE[c.campaignTp];
+      const base = { type: c.campaignTp, status: c.status };
+      if (EXCLUDED_CAMPAIGNS.some((r) => r.test(c.name))) {
+        units.push({
+          ...base,
+          id: c.nccCampaignId,
+          label: c.name,
+          target: null,
+          excluded: true,
+        });
+        continue;
+      }
+      const client = clientByName(c.name);
+      if (client || !channel) {
+        units.push({
+          ...base,
+          id: c.nccCampaignId,
+          label: c.name,
+          target: client && channel ? { client, channel } : null,
+        });
+        continue;
+      }
+      // 캠페인 이름에 지점이 없으면 광고그룹 이름으로 나눈다
+      const groups = await call<Adgroup[]>(cfg, customerId, "/ncc/adgroups", {
+        nccCampaignId: c.nccCampaignId,
+      });
+      for (const g of groups) {
+        const gc = clientByName(g.name);
+        units.push({
+          type: c.campaignTp,
+          status: g.status,
+          id: g.nccAdgroupId,
+          label: `${c.name} / ${g.name}`,
+          target: gc ? { client: gc, channel } : null,
+        });
+      }
+    }
+
+    // /stats 는 ID 하나씩만 받고, 기간을 주면 일별 행을 돌려준다
+    const statsById = new Map<string, StatRow[]>();
+    for (const u of units) {
       const res = await call<{ data: StatRow[] }>(cfg, customerId, "/stats", {
-        id: c.nccCampaignId,
+        id: u.id,
         fields: JSON.stringify(["impCnt", "clkCnt", "salesAmt", "ccnt"]),
         timeRange: JSON.stringify({ since, until }),
       });
-      statsById.set(c.nccCampaignId, res.data);
+      statsById.set(u.id, res.data);
     }
 
     // 같은 날·같은 클라이언트·같은 채널의 캠페인은 합친다
@@ -150,10 +201,9 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
         conversions: number;
       }
     >();
-    for (const campaign of campaigns) {
-      const target = classify(campaign);
+    for (const { id, target } of units) {
       if (!target) continue;
-      for (const s of statsById.get(campaign.nccCampaignId) ?? []) {
+      for (const s of statsById.get(id) ?? []) {
         const date = (s.dateStart ?? s.date ?? "").slice(0, 10);
         if (!date) continue;
         const key = `${date}|${target.client}|${target.channel}`;
@@ -197,12 +247,13 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
 
     const spendOf = (id: string) =>
       (statsById.get(id) ?? []).reduce((a, s) => a + (s.salesAmt ?? 0), 0);
-    const campaignReport = campaigns.map((c) => ({
-      name: c.name,
-      type: c.campaignTp,
-      target: classify(c),
-      status: c.status,
-      spend: Math.round(spendOf(c.nccCampaignId)),
+    const campaignReport = units.map((u) => ({
+      name: u.label,
+      type: u.type,
+      target: u.target,
+      status: u.status,
+      excluded: u.excluded ?? false,
+      spend: Math.round(spendOf(u.id)),
     }));
 
     await db

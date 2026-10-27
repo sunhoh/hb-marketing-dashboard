@@ -4,20 +4,26 @@
  */
 import "./env";
 import { db } from "../db";
-import { isNaverSearchAdConfigured, syncNaverSearchAd } from "../db/sync/naver-searchad";
+import {
+  isNaverSearchAdConfigured,
+  syncNaverSearchAd,
+} from "../db/sync/naver-searchad";
 import { syncSheet } from "../db/sync/sheet";
 import { CLIENTS, CHANNEL_LABELS } from "../lib/clients";
 import { formatWon } from "../lib/metrics";
 
-const name = (slug: string) => CLIENTS.find((c) => c.slug === slug)?.name ?? slug;
+const name = (slug: string) =>
+  CLIENTS.find((c) => c.slug === slug)?.name ?? slug;
 
 async function sheet() {
   console.log("구글 시트 가져오는 중…");
   const { counts, issues } = await syncSheet();
-  for (const [tab, n] of Object.entries(counts)) console.log(`  ${tab}: ${n}줄`);
+  for (const [tab, n] of Object.entries(counts))
+    console.log(`  ${tab}: ${n}줄`);
   if (issues.length) {
     console.log(`  확인이 필요한 줄 ${issues.length}개 (건너뜀):`);
-    for (const i of issues) console.log(`    · ${i.tab}${i.row ? ` ${i.row}행` : ""}: ${i.message}`);
+    for (const i of issues)
+      console.log(`    · ${i.tab}${i.row ? ` ${i.row}행` : ""}: ${i.message}`);
   }
 }
 
@@ -30,14 +36,23 @@ async function naver() {
   const { since, until, rows, campaigns } = await syncNaverSearchAd();
   console.log(`  ${since} ~ ${until}, ${rows}줄`);
   for (const c of campaigns) {
-    const where = c.target ? `→ ${name(c.target.client)} · ${CHANNEL_LABELS[c.target.channel] ?? c.target.channel}` : "→ 가져오지 않음";
-    console.log(`    · ${c.name} (${c.type}${c.status === "PAUSED" ? ", 중지" : ""}) ${formatWon(c.spend)} ${where}`);
+    const where = c.target
+      ? `→ ${name(c.target.client)} · ${CHANNEL_LABELS[c.target.channel] ?? c.target.channel}`
+      : c.excluded
+        ? "→ 제외(팀 결정)"
+        : "→ 가져오지 않음(지점을 알 수 없음)";
+    console.log(
+      `    · ${c.name} (${c.type}${c.status === "PAUSED" ? ", 중지" : ""}) ${formatWon(c.spend)} ${where}`,
+    );
   }
 }
 
 async function main() {
   let failed = false;
-  for (const [label, job] of [["구글 시트", sheet], ["네이버 검색광고", naver]] as const) {
+  for (const [label, job] of [
+    ["구글 시트", sheet],
+    ["네이버 검색광고", naver],
+  ] as const) {
     try {
       await job();
     } catch (e) {
