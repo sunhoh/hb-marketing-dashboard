@@ -30,8 +30,9 @@ export type Dataset = {
   sns: SnsStat[];
 };
 
-/** 채널 표에서 '기준보다 나쁨'으로 칠하는 문턱 (기준 = 같은 클라이언트의 기간 전체 값) */
+/** 채널 표에서 '평소보다 나쁨'으로 칠하는 문턱 (기준 = 같은 채널·세부의 직전 12주) */
 export const BASELINE_TOLERANCE = 0.2;
+export const BASELINE_WEEKS = 12;
 /** 소재 OFF 후보 문턱 (기준 = 같은 클라이언트 메타 소재 전체 값) */
 export const OFF_CTR_RATIO = 0.7;
 export const OFF_CPC_RATIO = 1.3;
@@ -104,14 +105,18 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
     return { weekStart, inPeriod: currentSet.has(weekStart), spend: t.spend, ctr: ctr(t), cpc: cpc(t) };
   });
 
-  // 채널·국가별 표
-  const clientBaselines = new Map(
-    [...groupBy(current, (r) => r.client)].map(([slug, rows]) => [slug, deriveAll(sumTotals(rows))]),
+  // 채널별 표 — 기준은 같은 행(채널·세부)의 선택 기간 직전 12주
+  const rowKey = (r: WeeklyMetric) => `${r.client}|${r.channel}|${r.segment ?? ""}`;
+  const periodStart = weeks.current[0];
+  const startIdx = periodStart ? ds.weeks.indexOf(periodStart) : -1;
+  const baselineWeeks = startIdx > 0 ? ds.weeks.slice(Math.max(0, startIdx - BASELINE_WEEKS), startIdx) : [];
+  const baselines = new Map(
+    [...groupBy(inWeeks(metrics, baselineWeeks), rowKey)].map(([id, rows]) => [id, deriveAll(sumTotals(rows))]),
   );
-  const channels: ChannelRow[] = [...groupBy(current, (r) => `${r.client}|${r.channel}|${r.segment ?? ""}`)].map(
+  const channels: ChannelRow[] = [...groupBy(current, rowKey)].map(
     ([id, rows]) => {
       const { client: slug, channel, segment } = rows[0] as WeeklyMetric;
-      const base = clientBaselines.get(slug)!;
+      const base = baselines.get(id);
       return {
         id,
         client: slug,
@@ -120,7 +125,7 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
         channelLabel: CHANNEL_LABELS[channel] ?? channel,
         segment,
         conversionLabel: CONVERSION_LABELS[channel] ?? "매체 전환",
-        baseline: { ctr: base.ctr, cpc: base.cpc, cpm: base.cpm },
+        baseline: { ctr: base?.ctr ?? null, cpc: base?.cpc ?? null, cpm: base?.cpm ?? null },
         ...deriveAll(sumTotals(rows)),
       };
     },

@@ -33,7 +33,11 @@ async function naver() {
     return;
   }
   console.log("네이버 검색광고 가져오는 중…");
-  const { since, until, rows, campaigns } = await syncNaverSearchAd();
+  // 처음 한 번은 npm run sync -- --naver-days=365 로 과거를 채운다
+  const daysArg = process.argv.find((a) => a.startsWith("--naver-days="));
+  const { since, until, rows, campaigns } = await syncNaverSearchAd(
+    daysArg ? Number(daysArg.split("=")[1]) : undefined,
+  );
   console.log(`  ${since} ~ ${until}, ${rows}줄`);
   for (const c of campaigns) {
     const where = c.target

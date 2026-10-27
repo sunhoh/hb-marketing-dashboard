@@ -38,7 +38,7 @@ export const CONVERSION_LABELS: Record<string, string> = {
   meta: "폼 제출·메시지",
   "gangnam-unni": "상담 신청",
   creatrip: "예약 문의",
-  "naver-place": "전화·길찾기",
+  "naver-place": "전환",
   "naver-search": "전환",
   "naver-brand": "전환",
   danggeun: "채팅 문의",

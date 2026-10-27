@@ -13,12 +13,12 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BASELINE_TOLERANCE, type ChannelRow, type Metrics } from "@/lib/build-metrics";
+import { BASELINE_TOLERANCE, BASELINE_WEEKS, type ChannelRow, type Metrics } from "@/lib/build-metrics";
 import { formatNumber, formatPercent, formatWon } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { EmptyState, Section } from "./primitives";
 
-/** 같은 클라이언트의 기간 전체 값보다 BASELINE_TOLERANCE 이상 나쁜 칸 */
+/** 같은 채널·세부의 직전 12주보다 BASELINE_TOLERANCE 이상 나쁜 칸 */
 function isWorse(row: ChannelRow, key: "ctr" | "cpc" | "cpm") {
   const v = row[key];
   const base = row.baseline[key];
@@ -62,7 +62,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
       {
         id: "channel",
         accessorFn: (r) => `${r.channelLabel} ${r.segment ?? ""}`,
-        header: "채널 · 국가",
+        header: "채널 · 세부",
         sortFn: "text",
         cell: ({ row }) => (
           <span className="font-semibold text-foreground">
@@ -106,11 +106,11 @@ export function ChannelTable({ data }: { data: Metrics }) {
 
   return (
     <Section
-      title="채널·국가별 효율"
+      title="채널별 효율"
       description={
         <>
           머리글을 누르면 정렬돼요 ·{" "}
-          <span className="rounded-sm bg-bad-bg px-1 text-bad">빨간 칸</span> 은 같은 클라이언트 전체보다{" "}
+          <span className="rounded-sm bg-bad-bg px-1 text-bad">빨간 칸</span> 은 같은 행의 직전 {BASELINE_WEEKS}주보다{" "}
           {BASELINE_TOLERANCE * 100}% 이상 나쁜 값
         </>
       }
@@ -177,7 +177,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
                           meta?.numeric && "text-right",
                           worse && "bg-bad-bg font-semibold text-bad",
                         )}
-                        title={worse ? "같은 클라이언트 전체 평균보다 나쁨" : undefined}
+                        title={worse ? `직전 ${BASELINE_WEEKS}주보다 ${BASELINE_TOLERANCE * 100}% 이상 나쁨` : undefined}
                       >
                         <table.FlexRender cell={cell} />
                       </TableCell>

@@ -47,8 +47,10 @@ export function sumTotals(rows: Pick<WeeklyMetric, "spend" | "impressions" | "cl
   );
 }
 
+/** 소진액이 0 이면(브랜드검색 계약형 등) CPC·CPM 은 ₩0 이 아니라 — 로 둔다 */
 export function deriveAll(t: Totals) {
-  return { ...t, ctr: ctr(t), cpc: cpc(t), cpm: cpm(t) };
+  const free = t.spend === 0;
+  return { ...t, ctr: ctr(t), cpc: free ? null : cpc(t), cpm: free ? null : cpm(t) };
 }
 export type DerivedTotals = ReturnType<typeof deriveAll>;
 
