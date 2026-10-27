@@ -33,7 +33,7 @@ export type SnsStat = {
   platform: "instagram" | "youtube" | "tiktok";
   weekStart: string;
   followers: number;
-  views: number;
+  views: number | null; // 모르면 null (유튜브 첫 주 등)
 };
 
 export type Totals = {

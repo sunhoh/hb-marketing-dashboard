@@ -200,7 +200,11 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
   const snsRows = byClient(ds.sns, client);
   const sns = [...groupBy(snsRows, (r) => `${r.client}|${r.platform}`)].map(([, rows]) => {
     const at = (w: string | undefined) => rows.find((r) => r.weekStart === w);
-    const sumViews = (ws: string[]) => inWeeks(rows, ws).reduce((a, r) => a + r.views, 0);
+    /** 기간 안에 조회수를 아는 주가 하나도 없으면 null(— 표시) */
+    const sumViews = (ws: string[]) => {
+      const known = inWeeks(rows, ws).filter((r) => r.views !== null);
+      return known.length ? known.reduce((a, r) => a + r.views!, 0) : null;
+    };
     const first = rows[0] as SnsStat;
     const end = at(lastWeek)?.followers ?? 0;
     const startFollowers = at(prevLastWeek)?.followers ?? null;

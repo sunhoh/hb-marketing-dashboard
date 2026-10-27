@@ -100,7 +100,7 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
     placeRanks: ranks.flatMap((r) => (r.rank === null ? [] : [{ weekStart: r.weekStart, keyword: r.keyword, rank: r.rank }])),
     placeStats: stats.map((s) => ({ weekStart: s.weekStart, reviews: s.reviews, rating: s.rating ?? 0, saves: s.saves ?? 0 })),
     viral: [...viralMap.values()].map(({ keywords, ...v }) => ({ ...v, topKeywords: keywords.size })),
-    sns: sns.map((s) => ({ client: s.client, platform: s.platform, weekStart: s.weekStart, followers: s.followers, views: s.views ?? 0 })),
+    sns: sns.map((s) => ({ client: s.client, platform: s.platform, weekStart: s.weekStart, followers: s.followers, views: s.views })),
   };
 
   return { dataset, lastSyncedAt: lastRun[0]?.finishedAt?.toISOString() ?? null };

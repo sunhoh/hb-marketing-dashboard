@@ -149,7 +149,7 @@ function ViralCard({ viral }: { viral: NonNullable<Metrics["organic"]["viral"]> 
 
 function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
   return (
-    <Section title="SNS" description="기간 말 팔로워와 기간 내 조회수">
+    <Section title="SNS" description="기간 말 팔로워·구독자와 기간 내 조회수">
       <ul className="divide-y divide-border">
         {sns.map((s) => (
           <li key={`${s.client}-${s.platform}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3">
@@ -158,16 +158,22 @@ function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
             </div>
             <dl className="tabular grid grid-cols-2 gap-x-5 text-right text-t7">
               <div>
-                <dt className="text-st12 text-subtle">팔로워</dt>
+                <dt className="text-st12 text-subtle">{s.platform === "youtube" ? "구독자" : "팔로워"}</dt>
                 <dd className="font-semibold text-foreground">
-                  {formatNumber(s.followers)} <CountDelta className="text-st12" value={s.followerChange} />
+                  {formatNumber(s.followers)}
+                  {s.followerChange !== null && <> <CountDelta className="text-st12" value={s.followerChange} /></>}
                 </dd>
               </div>
               <div>
                 <dt className="text-st12 text-subtle">조회수</dt>
                 <dd className="font-semibold text-foreground">
-                  {formatNumber(s.views)}{" "}
-                  <Delta className="text-st12" metric="impressions" rate={changeRate(s.views, s.previousViews)} />
+                  {formatNumber(s.views)}
+                  {s.views !== null && s.previousViews !== null && (
+                    <>
+                      {" "}
+                      <Delta className="text-st12" metric="impressions" rate={changeRate(s.views, s.previousViews)} />
+                    </>
+                  )}
                 </dd>
               </div>
             </dl>
