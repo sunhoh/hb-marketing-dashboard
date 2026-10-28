@@ -30,7 +30,7 @@ export function SummaryCards({ data, isSms }: { data: Metrics; isSms: boolean })
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-t7">
               <span className="text-subtle">{data.compareLabel}</span>
-              <Delta metric={c.key} rate={changeRate(current, previous)} />
+              <Delta rate={changeRate(current, previous)} />
               <span className="tabular text-subtle">· 이전 {c.format(previous)}</span>
             </div>
           </article>

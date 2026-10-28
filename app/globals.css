@@ -61,6 +61,9 @@
   --tone-good-bg: var(--blue50);
   --tone-bad: var(--red600);
   --tone-bad-bg: var(--red50);
+  /* 증감 색은 증권식: 상승 빨강, 하락 파랑 (좋고 나쁨과 무관) */
+  --tone-up: var(--red600);
+  --tone-down: var(--blue600);
   --warn-bg: var(--orange50);
   --warn-fg: #c25000;
 
@@ -105,6 +108,8 @@
     --tone-good-bg: rgba(69, 147, 252, 0.16);
     --tone-bad: #fb8890;
     --tone-bad-bg: rgba(240, 68, 82, 0.16);
+    --tone-up: #fb8890;
+    --tone-down: #64a8ff;
     --warn-bg: rgba(254, 152, 0, 0.16);
     --warn-fg: #ffbd51;
 
@@ -151,6 +156,8 @@
   --color-good-bg: var(--tone-good-bg);
   --color-bad: var(--tone-bad);
   --color-bad-bg: var(--tone-bad-bg);
+  --color-up: var(--tone-up);
+  --color-down: var(--tone-down);
   --color-warn-bg: var(--warn-bg);
   --color-warn-fg: var(--warn-fg);
 

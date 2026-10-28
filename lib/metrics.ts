@@ -85,13 +85,4 @@ export function formatCountShort(v: number | null) {
   return intFormat.format(Math.round(v));
 }
 
-/** 비용 지표(CPC·CPM)는 낮을수록 좋다 → 증감 색을 반대로 */
 export type MetricKey = "spend" | "impressions" | "clicks" | "conversions" | "ctr" | "cpc" | "cpm";
-export const LOWER_IS_BETTER: ReadonlySet<MetricKey> = new Set(["cpc", "cpm"]);
-
-/** 증감이 좋은 방향인지: true 좋음, false 나쁨, null 판단 안 함(소진액처럼 중립이거나 값 없음) */
-export function changeTone(metric: MetricKey, rate: number | null): "good" | "bad" | "neutral" {
-  if (rate === null || Math.abs(rate) < 0.05 || metric === "spend") return "neutral";
-  const up = rate > 0;
-  return up !== LOWER_IS_BETTER.has(metric) ? "good" : "bad";
-}

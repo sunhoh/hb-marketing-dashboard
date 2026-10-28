@@ -29,17 +29,17 @@ export function WebSection({ web, compareLabel }: { web: NonNullable<Metrics["we
         <Stat
           label="세션"
           value={formatNumber(current.sessions)}
-          delta={<Delta metric="clicks" rate={changeRate(current.sessions, previous.sessions)} />}
+          delta={<Delta rate={changeRate(current.sessions, previous.sessions)} />}
         />
         <Stat
           label="전환"
           value={formatNumber(current.conversions)}
-          delta={<Delta metric="conversions" rate={changeRate(current.conversions, previous.conversions)} />}
+          delta={<Delta rate={changeRate(current.conversions, previous.conversions)} />}
         />
         <Stat
           label="전환율"
           value={formatPercent(current.rate)}
-          delta={<Delta metric="ctr" rate={changeRate(current.rate, previous.rate)} />}
+          delta={<Delta rate={changeRate(current.rate, previous.rate)} />}
         />
       </div>
       <p className="mt-2 px-1 text-st12 text-subtle">{compareLabel}</p>
@@ -66,7 +66,7 @@ export function WebSection({ web, compareLabel }: { web: NonNullable<Metrics["we
                 </td>
                 <td className="px-3 text-right text-body">
                   {formatNumber(s.sessions)}{" "}
-                  <Delta className="text-st12" metric="clicks" rate={changeRate(s.sessions, s.previousSessions)} />
+                  <Delta className="text-st12" rate={changeRate(s.sessions, s.previousSessions)} />
                 </td>
                 <td className="px-3 text-right text-body">{formatPercent(s.share)}</td>
                 <td className="px-3 text-right text-body">{formatNumber(s.conversions)}</td>

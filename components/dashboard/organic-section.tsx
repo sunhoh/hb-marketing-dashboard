@@ -6,7 +6,7 @@ import type { Metrics } from "@/lib/build-metrics";
 import { changeRate, EMPTY, formatCountShort, formatNumber } from "@/lib/metrics";
 import { shortDate } from "@/lib/periods";
 import { useThemeColors } from "@/lib/use-theme-colors";
-import { CountDelta, Delta, EmptyState, Section } from "./primitives";
+import { CountDelta, Delta, directionClass, EmptyState, Section } from "./primitives";
 
 function Stat({ label, value, delta }: { label: string; value: string; delta: React.ReactNode }) {
   return (
@@ -122,7 +122,7 @@ function CountDeltaDecimal({ value }: { value: number }) {
   const rounded = Math.round(value * 100) / 100;
   if (rounded === 0) return <span className="font-semibold text-muted-foreground">변동 없음</span>;
   return (
-    <span className={rounded > 0 ? "font-semibold text-good" : "font-semibold text-bad"}>
+    <span className={`font-semibold ${directionClass(rounded)}`}>
       {rounded > 0 ? "▲" : "▼"} {Math.abs(rounded).toFixed(2)}
     </span>
   );
@@ -135,12 +135,12 @@ function ViralCard({ viral }: { viral: NonNullable<Metrics["organic"]["viral"]> 
         <Stat
           label="발행 수"
           value={`${formatNumber(viral.current.published)}건`}
-          delta={<Delta metric="clicks" rate={changeRate(viral.current.published, viral.previous.published)} />}
+          delta={<Delta rate={changeRate(viral.current.published, viral.previous.published)} />}
         />
         <Stat
           label="상위노출 키워드"
           value={`${formatNumber(viral.current.topKeywords)}개`}
-          delta={<Delta metric="clicks" rate={changeRate(viral.current.topKeywords, viral.previous.topKeywords)} />}
+          delta={<Delta rate={changeRate(viral.current.topKeywords, viral.previous.topKeywords)} />}
         />
       </div>
     </Section>
@@ -171,7 +171,7 @@ function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
                   {s.views !== null && s.previousViews !== null && (
                     <>
                       {" "}
-                      <Delta className="text-st12" metric="impressions" rate={changeRate(s.views, s.previousViews)} />
+                      <Delta className="text-st12" rate={changeRate(s.views, s.previousViews)} />
                     </>
                   )}
                 </dd>
@@ -237,12 +237,12 @@ function SearchCard({ search, compareLabel }: { search: NonNullable<Metrics["org
         <Stat
           label="클릭"
           value={formatNumber(current.clicks)}
-          delta={<Delta metric="clicks" rate={changeRate(current.clicks, previous.clicks)} />}
+          delta={<Delta rate={changeRate(current.clicks, previous.clicks)} />}
         />
         <Stat
           label="노출"
           value={formatCountShort(current.impressions)}
-          delta={<Delta metric="impressions" rate={changeRate(current.impressions, previous.impressions)} />}
+          delta={<Delta rate={changeRate(current.impressions, previous.impressions)} />}
         />
         <Stat
           label="평균 순위"

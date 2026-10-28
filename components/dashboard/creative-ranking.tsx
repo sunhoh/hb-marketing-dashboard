@@ -27,12 +27,12 @@ function CreativeItem({ row, rankBy }: { row: CreativeRow; rankBy: RankBy }) {
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="truncate text-t6 font-semibold text-foreground">{row.name}</p>
           {off && (
-            <Badge className="h-5 rounded-md bg-bad-bg px-1.5 text-st12 font-semibold text-bad">OFF 후보</Badge>
+            <Badge className="h-5 rounded-md bg-warn-bg px-1.5 text-st12 font-semibold text-warn-fg">OFF 후보</Badge>
           )}
         </div>
         <p className="mt-0.5 text-st12 text-subtle">
           {row.id} · {row.format}
-          {off && <span className="text-bad"> · {row.offReasons.join(", ")}</span>}
+          {off && <span className="text-warn-fg"> · {row.offReasons.join(", ")}</span>}
         </p>
       </div>
       <dl className="tabular col-start-2 mt-2 grid grid-cols-3 gap-x-4 text-right text-t7 sm:col-start-3 sm:mt-0 sm:w-72">

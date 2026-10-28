@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { changeTone, EMPTY, type MetricKey } from "@/lib/metrics";
+import { EMPTY } from "@/lib/metrics";
 
 export function Section({
   title,
@@ -28,27 +28,17 @@ export function Section({
   );
 }
 
-const TONE_CLASS = {
-  good: "text-good",
-  bad: "text-bad",
-  neutral: "text-muted-foreground",
-} as const;
+/** 증권식 색: 상승 빨강, 하락 파랑. 지표가 좋아졌는지와는 무관하게 방향만 나타낸다(팀 결정 2026-10-28) */
+export function directionClass(value: number) {
+  return value > 0 ? "text-up" : value < 0 ? "text-down" : "text-muted-foreground";
+}
 
-/** 증감률 표시. 비용 지표는 내려갈수록 좋은 색 */
-export function Delta({
-  metric,
-  rate,
-  className,
-}: {
-  metric: MetricKey;
-  rate: number | null;
-  className?: string;
-}) {
+/** 증감률 표시 */
+export function Delta({ rate, className }: { rate: number | null; className?: string }) {
   if (rate === null) return <span className={cn("text-muted-foreground", className)}>{EMPTY}</span>;
-  const tone = changeTone(metric, rate);
   const flat = Math.abs(rate) < 0.05;
   return (
-    <span className={cn("tabular inline-flex items-center gap-0.5 font-semibold", TONE_CLASS[tone], className)}>
+    <span className={cn("tabular inline-flex items-center gap-0.5 font-semibold", directionClass(flat ? 0 : rate), className)}>
       {!flat && <span aria-hidden>{rate > 0 ? "▲" : "▼"}</span>}
       <span className="sr-only">{flat ? "변화 없음" : rate > 0 ? "증가" : "감소"}</span>
       {flat ? "0.0" : Math.abs(rate).toFixed(1)}%
@@ -56,23 +46,12 @@ export function Delta({
   );
 }
 
-/** 정수 증감(팔로워·리뷰 수 등). lowerIsBetter 는 순위처럼 숫자가 작을수록 좋은 값 */
-export function CountDelta({
-  value,
-  unit = "",
-  lowerIsBetter = false,
-  className,
-}: {
-  value: number | null;
-  unit?: string;
-  lowerIsBetter?: boolean;
-  className?: string;
-}) {
+/** 정수 증감(팔로워·리뷰 수 등). 순위는 호출하는 쪽에서 '올라간 만큼'을 양수로 넘긴다 */
+export function CountDelta({ value, unit = "", className }: { value: number | null; unit?: string; className?: string }) {
   if (value === null) return <span className={cn("text-muted-foreground", className)}>{EMPTY}</span>;
   if (value === 0) return <span className={cn("font-semibold text-muted-foreground", className)}>변동 없음</span>;
-  const tone = value === 0 ? "neutral" : value > 0 !== lowerIsBetter ? "good" : "bad";
   return (
-    <span className={cn("tabular inline-flex items-center gap-0.5 font-semibold", TONE_CLASS[tone], className)}>
+    <span className={cn("tabular inline-flex items-center gap-0.5 font-semibold", directionClass(value), className)}>
       <span aria-hidden>{value > 0 ? "▲" : "▼"}</span>
       {Math.abs(value).toLocaleString("ko-KR")}
       {unit}

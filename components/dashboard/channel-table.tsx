@@ -110,7 +110,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
       description={
         <>
           머리글을 누르면 정렬돼요 ·{" "}
-          <span className="rounded-sm bg-bad-bg px-1 text-bad">빨간 칸</span> 은 같은 행의 직전 {BASELINE_WEEKS}주보다{" "}
+          <span className="rounded-sm bg-warn-bg px-1 text-warn-fg">주황 칸</span> 은 같은 행의 직전 {BASELINE_WEEKS}주보다{" "}
           {BASELINE_TOLERANCE * 100}% 이상 나쁜 값
         </>
       }
@@ -175,7 +175,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
                           i === 0 && "pl-5 sm:pl-6",
                           i === cells.length - 1 && "pr-5 sm:pr-6",
                           meta?.numeric && "text-right",
-                          worse && "bg-bad-bg font-semibold text-bad",
+                          worse && "bg-warn-bg font-semibold text-warn-fg",
                         )}
                         title={worse ? `직전 ${BASELINE_WEEKS}주보다 ${BASELINE_TOLERANCE * 100}% 이상 나쁨` : undefined}
                       >
