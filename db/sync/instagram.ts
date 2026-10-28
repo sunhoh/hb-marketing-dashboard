@@ -1,5 +1,5 @@
 /**
- * 인스타그램(Graph API, 메타 토큰 공용) → sns_snapshots(팔로워, 하루 한 번) + sns_stats(주 단위, source = "instagram_api").
+ * 인스타그램(Graph API, 메타 토큰 공용) → sns_daily(팔로워, 하루 한 번) + sns_weekly(주 단위, source = "instagram_api").
  *   · 주 조회수: 계정 인사이트 views(total_value)를 월요일~일요일 범위로 바로 받는다(과거 주도 조회 가능).
  *   · 팔로워: API 가 과거 값을 주지 않아서 동기화할 때마다 스냅숏을 쌓고, 주의 마지막 스냅숏을 그 주 팔로워로 쓴다.
  *
@@ -8,7 +8,7 @@
  */
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { snsSnapshots, snsStats, syncRuns } from "@/db/schema";
+import { snsDaily, snsWeekly, syncRuns } from "@/db/schema";
 import { addDays, mondayOf } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
 
@@ -97,7 +97,7 @@ export async function syncInstagram(weeks = DEFAULT_WEEKS) {
       }>(`${acc.id}?fields=followers_count,username`);
       const followers = profile.followers_count;
       await db
-        .insert(snsSnapshots)
+        .insert(snsDaily)
         .values({
           date: today,
           client: acc.client,
@@ -109,25 +109,25 @@ export async function syncInstagram(weeks = DEFAULT_WEEKS) {
         })
         .onConflictDoUpdate({
           target: [
-            snsSnapshots.date,
-            snsSnapshots.client,
-            snsSnapshots.platform,
-            snsSnapshots.account,
+            snsDaily.date,
+            snsDaily.client,
+            snsDaily.platform,
+            snsDaily.account,
           ],
           set: { followers, syncedAt: sql`now()` },
         });
 
       // 주의 마지막 스냅숏 = 그 주 팔로워
       const snaps = await db
-        .select({ date: snsSnapshots.date, followers: snsSnapshots.followers })
-        .from(snsSnapshots)
+        .select({ date: snsDaily.date, followers: snsDaily.followers })
+        .from(snsDaily)
         .where(
           and(
-            eq(snsSnapshots.platform, "instagram"),
-            eq(snsSnapshots.account, account),
+            eq(snsDaily.platform, "instagram"),
+            eq(snsDaily.account, account),
           ),
         )
-        .orderBy(snsSnapshots.date);
+        .orderBy(snsDaily.date);
       const followersByWeek = new Map(
         snaps.map((s) => [mondayOf(s.date), s.followers]),
       );
@@ -148,7 +148,7 @@ export async function syncInstagram(weeks = DEFAULT_WEEKS) {
         if (monday === thisMonday) weekViews = views;
         const weekFollowers = followersByWeek.get(monday) ?? null;
         await db
-          .insert(snsStats)
+          .insert(snsWeekly)
           .values({
             weekStart: monday,
             client: acc.client,
@@ -160,15 +160,15 @@ export async function syncInstagram(weeks = DEFAULT_WEEKS) {
           })
           .onConflictDoUpdate({
             target: [
-              snsStats.weekStart,
-              snsStats.client,
-              snsStats.platform,
-              snsStats.account,
+              snsWeekly.weekStart,
+              snsWeekly.client,
+              snsWeekly.platform,
+              snsWeekly.account,
             ],
             set: {
               views,
               // 스냅숏이 없는 과거 주는 이미 있던 값을 지우지 않는다
-              followers: sql`coalesce(excluded.followers, ${snsStats.followers})`,
+              followers: sql`coalesce(excluded.followers, ${snsWeekly.followers})`,
               syncedAt: sql`now()`,
             },
           });

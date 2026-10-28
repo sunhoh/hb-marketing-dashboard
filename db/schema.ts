@@ -4,6 +4,7 @@
  */
 import {
   bigint,
+  boolean,
   date,
   index,
   integer,
@@ -15,27 +16,44 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
-import type { ClientSlug } from "@/lib/types";
 
-/** 데이터가 어디서 왔는지 — 화면의 "연결 끊김" 경고와 디버깅에 쓴다 */
-export type Source =
-  | "meta_api"
-  | "naver_api"
-  | "instagram_api"
-  | "youtube_api"
-  | "ga4_api"
-  | "gsc_api"
-  | "sheet";
+// ── 공용 enum ──────────────────────────────────────────
 
-const client = () => text("client").$type<ClientSlug>().notNull();
-const source = () => text("source").$type<Source>().notNull();
+/** 클라이언트. 값은 URL·코드에서 쓰는 slug 그대로 */
+export const clientEnum = pgEnum("client", ["gu-gangnam", "gu-ilsan", "luho"]);
+
+/** 데이터 출처 — 화면의 "마지막 동기화"와 디버깅에 쓴다 */
+export const sourceEnum = pgEnum("source", [
+  "naver_api",
+  "meta_api",
+  "instagram_api",
+  "youtube_api",
+  "ga4_api",
+  "gsc_api",
+  "sheet",
+]);
+export type Source = (typeof sourceEnum.enumValues)[number];
+
+/** SNS 플랫폼 */
+export const snsPlatformEnum = pgEnum("sns_platform", [
+  "instagram",
+  "youtube",
+  "tiktok",
+]);
+
+/** 동기화 실행 상태 */
+export const syncStatusEnum = pgEnum("sync_status", [
+  "running",
+  "success",
+  "error",
+]);
+
+const client = () => clientEnum("client").notNull();
+const source = () => sourceEnum("source").notNull();
 const syncedAt = () =>
   timestamp("synced_at", { withTimezone: true }).notNull().defaultNow();
 
 // ── 광고 ────────────────────────────────────────────────
-
-/** 클라이언트. 값은 URL·코드에서 쓰는 slug 그대로 */
-export const clientEnum = pgEnum("client", ["gu-gangnam", "gu-ilsan", "luho"]);
 
 /** 광고 채널(채널별 효율 표의 "채널") */
 export const adChannelEnum = pgEnum("ad_channel", [
@@ -69,17 +87,6 @@ export const countryEnum = pgEnum("country", [
   "UNKNOWN", // 메타가 국가를 모름
 ]);
 export type Country = (typeof countryEnum.enumValues)[number];
-
-/** 데이터 출처. 우선 ad_metrics 에만 쓰고, 다른 표는 다음 단계에서 옮긴다 */
-export const sourceEnum = pgEnum("source", [
-  "naver_api",
-  "meta_api",
-  "instagram_api",
-  "youtube_api",
-  "ga4_api",
-  "gsc_api",
-  "sheet",
-]);
 
 export const creativeFormatEnum = pgEnum("creative_format", [
   "image",
@@ -149,19 +156,21 @@ export const adMetrics = pgTable(
 );
 
 /**
- * SNS 팔로워(주 마지막 날 기준)와 그 주 조회수.
+ * SNS 주간 요약(화면이 읽는 표): 그 주 마지막 날 팔로워·구독자와 그 주 조회수.
+ *   · 인스타그램 조회수: 계정 인사이트 views(릴스·게시물·스토리, 광고 포함)를 주 단위로 바로 받는다.
+ *   · 유튜브 조회수: API 가 누적값만 줘서 sns_daily 로 계산한다.
+ *       이번 주 조회수 = 이번 주 마지막 날 누적 조회수 − 지난주 마지막 날 누적 조회수
+ *     그래서 기록을 시작한 첫 주는 비어(null) 있다.
  * 한 클라이언트가 같은 플랫폼 계정을 여럿 가질 수 있어서(@gu_clinic, @gu_clinic_tw) account 를 키에 넣는다.
  * 인스타그램은 과거 팔로워 수를 주지 않아서, 스냅숏을 쌓기 전 주는 followers 가 null 이다.
  */
-export const snsStats = pgTable(
-  "sns_stats",
+export const snsWeekly = pgTable(
+  "sns_weekly",
   {
     id: serial("id").primaryKey(),
     weekStart: date("week_start").notNull(),
     client: client(),
-    platform: text("platform")
-      .$type<"instagram" | "youtube" | "tiktok">()
-      .notNull(),
+    platform: snsPlatformEnum("platform").notNull(),
     account: text("account").notNull().default(""), // @핸들. 시트 입력·유튜브는 ""
     followers: integer("followers"),
     views: integer("views"),
@@ -169,32 +178,29 @@ export const snsStats = pgTable(
     syncedAt: syncedAt(),
   },
   (t) => [
-    unique("sns_stats_key").on(t.weekStart, t.client, t.platform, t.account),
+    unique("sns_weekly_key").on(t.weekStart, t.client, t.platform, t.account),
   ],
 );
 
 /**
- * SNS 누적값 스냅숏(API 가 하루 한 번 기록). 유튜브는 기간 조회수를 주지 않아서
- * 누적 조회수의 주간 차이로 sns_stats 의 views 를 만든다.
+ * SNS 일지(동기화 때마다 그날 값을 기록). 인스타그램·유튜브 API 는 과거 팔로워 수를 주지 않아서
+ * 여기 쌓인 기록으로만 팔로워 증감과 유튜브 주간 조회수(sns_weekly 설명)를 만들 수 있다 — 지우면 되살릴 수 없다.
+ * total_views 는 유튜브 채널 누적 조회수(인스타그램은 0).
  */
-export const snsSnapshots = pgTable(
-  "sns_snapshots",
+export const snsDaily = pgTable(
+  "sns_daily",
   {
     id: serial("id").primaryKey(),
     date: date("date").notNull(),
     client: client(),
-    platform: text("platform")
-      .$type<"instagram" | "youtube" | "tiktok">()
-      .notNull(),
+    platform: snsPlatformEnum("platform").notNull(),
     account: text("account").notNull().default(""),
     followers: integer("followers").notNull(),
     totalViews: bigint("total_views", { mode: "number" }).notNull(),
     source: source(),
     syncedAt: syncedAt(),
   },
-  (t) => [
-    unique("sns_snapshots_key").on(t.date, t.client, t.platform, t.account),
-  ],
+  (t) => [unique("sns_daily_key").on(t.date, t.client, t.platform, t.account)],
 );
 
 /** 유튜브 영상(공개 정보). 조회수·좋아요·댓글은 동기화 때의 누적값 */
@@ -208,7 +214,7 @@ export const youtubeVideos = pgTable(
     title: text("title").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
     durationSec: integer("duration_sec").notNull(),
-    isShort: integer("is_short").notNull().default(0), // 3분 이하 세로 영상 추정(1/0)
+    isShort: boolean("is_short").notNull().default(false), // 3분 이하 → 쇼츠로 추정
     thumbnailUrl: text("thumbnail_url"),
     views: bigint("views", { mode: "number" }).notNull(),
     likes: integer("likes"),
@@ -216,18 +222,6 @@ export const youtubeVideos = pgTable(
     syncedAt: syncedAt(),
   },
   (t) => [unique("youtube_videos_key").on(t.client, t.videoId)],
-);
-
-/** 영상별 누적 조회수 스냅숏(하루 한 번). 나중에 '기간 중 조회수가 많이 늘어난 영상'에 쓴다 */
-export const youtubeVideoSnapshots = pgTable(
-  "youtube_video_snapshots",
-  {
-    id: serial("id").primaryKey(),
-    date: date("date").notNull(),
-    videoId: text("video_id").notNull(),
-    views: bigint("views", { mode: "number" }).notNull(),
-  },
-  (t) => [unique("youtube_video_snapshots_key").on(t.date, t.videoId)],
 );
 
 /** GA4 일별 유입. 전환 = 클라이언트별로 정한 이벤트(db/sync/google.ts CONVERSION_EVENTS)의 합 */
@@ -284,10 +278,7 @@ export const syncRuns = pgTable("sync_runs", {
     .notNull()
     .defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
-  status: text("status")
-    .$type<"running" | "success" | "error">()
-    .notNull()
-    .default("running"),
+  status: syncStatusEnum("status").notNull().default("running"),
   rowsUpserted: integer("rows_upserted").notNull().default(0),
   error: text("error"),
 });

@@ -1,8 +1,8 @@
 /**
- * YouTube Data API → sns_snapshots(하루 한 번 누적값) → sns_stats(주 단위, source = "youtube_api").
+ * YouTube Data API → sns_daily(하루 한 번 누적값) → sns_weekly(주 단위, source = "youtube_api").
  * API 는 기간 조회수를 주지 않으므로, 주 조회수 = 그 주 마지막 누적 조회수 − 지난주 마지막 누적 조회수.
  * 그래서 첫 동기화 주의 조회수는 비어 있고, 다음 주부터 채워진다. 구독자 수는 유튜브가 반올림해서 준다(예: 1.23만).
- * 영상 목록(최근 VIDEO_LOOKBACK_DAYS 일 업로드)과 영상별 누적 조회수 스냅숏도 함께 저장한다.
+ * 영상 목록(최근 VIDEO_LOOKBACK_DAYS 일 업로드)도 함께 저장한다(조회수는 동기화 때의 누적값).
  *
  * .env.local
  *   YOUTUBE_API_KEY   구글 클라우드 API 키(YouTube Data API v3 로 제한)
@@ -10,13 +10,7 @@
  */
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  snsSnapshots,
-  snsStats,
-  syncRuns,
-  youtubeVideoSnapshots,
-  youtubeVideos,
-} from "@/db/schema";
+import { snsDaily, snsWeekly, syncRuns, youtubeVideos } from "@/db/schema";
 import { isClientSlug } from "@/lib/clients";
 import { addDays, mondayOf } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
@@ -163,7 +157,7 @@ async function syncVideos(
         title: v.snippet.title,
         publishedAt: new Date(v.snippet.publishedAt),
         durationSec,
-        isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC ? 1 : 0,
+        isShort: durationSec > 0 && durationSec <= SHORTS_MAX_SEC,
         thumbnailUrl: v.snippet.thumbnails?.medium?.url ?? null,
         views: Number(v.statistics.viewCount ?? 0),
         likes:
@@ -182,13 +176,6 @@ async function syncVideos(
           target: [youtubeVideos.client, youtubeVideos.videoId],
           set: { ...row, syncedAt: sql`now()` },
         });
-      await db
-        .insert(youtubeVideoSnapshots)
-        .values({ date: today, videoId: v.id, views: row.views })
-        .onConflictDoUpdate({
-          target: [youtubeVideoSnapshots.date, youtubeVideoSnapshots.videoId],
-          set: { views: row.views },
-        });
     }
   }
   return ids.length;
@@ -200,19 +187,24 @@ function seoulToday() {
   );
 }
 
-/** 스냅숏 → 주 단위 sns_stats (주마다 마지막 스냅숏) */
+/**
+ * sns_daily → sns_weekly. 주마다 마지막 날 기록을 그 주 값으로 쓴다.
+ * 유튜브 API 는 누적 조회수만 주므로
+ *   이번 주 조회수 = 이번 주 마지막 날 누적 조회수 − 지난주 마지막 날 누적 조회수
+ * 기록을 시작한 첫 주는 뺄 값이 없어서 null(화면에서 —).
+ */
 async function rebuildWeekly(client: ClientSlug, account: string) {
   const snaps = await db
     .select()
-    .from(snsSnapshots)
+    .from(snsDaily)
     .where(
       and(
-        eq(snsSnapshots.client, client),
-        eq(snsSnapshots.platform, "youtube"),
-        eq(snsSnapshots.account, account),
+        eq(snsDaily.client, client),
+        eq(snsDaily.platform, "youtube"),
+        eq(snsDaily.account, account),
       ),
     )
-    .orderBy(asc(snsSnapshots.date));
+    .orderBy(asc(snsDaily.date));
   const lastByWeek = new Map<string, (typeof snaps)[number]>();
   for (const s of snaps) lastByWeek.set(mondayOf(s.date), s);
   const weeks = [...lastByWeek.entries()];
@@ -228,15 +220,15 @@ async function rebuildWeekly(client: ClientSlug, account: string) {
   }));
   await db.transaction(async (tx) => {
     await tx
-      .delete(snsStats)
+      .delete(snsWeekly)
       .where(
         and(
-          eq(snsStats.source, "youtube_api"),
-          eq(snsStats.client, client),
-          eq(snsStats.platform, "youtube"),
+          eq(snsWeekly.source, "youtube_api"),
+          eq(snsWeekly.client, client),
+          eq(snsWeekly.platform, "youtube"),
         ),
       );
-    if (rows.length) await tx.insert(snsStats).values(rows);
+    if (rows.length) await tx.insert(snsWeekly).values(rows);
   });
 }
 
@@ -284,7 +276,7 @@ export async function syncYoutube() {
         : Number(item.statistics.subscriberCount ?? 0);
       const totalViews = Number(item.statistics.viewCount ?? 0);
       await db
-        .insert(snsSnapshots)
+        .insert(snsDaily)
         .values({
           date: today,
           client,
@@ -296,10 +288,10 @@ export async function syncYoutube() {
         })
         .onConflictDoUpdate({
           target: [
-            snsSnapshots.date,
-            snsSnapshots.client,
-            snsSnapshots.platform,
-            snsSnapshots.account,
+            snsDaily.date,
+            snsDaily.client,
+            snsDaily.platform,
+            snsDaily.account,
           ],
           set: { followers, totalViews, syncedAt: sql`now()` },
         });

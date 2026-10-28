@@ -22,7 +22,8 @@ npm run db:stop    # 로컬 Postgres 끄기
 
 | 키 | 값 |
 |---|---|
-| `DATABASE_URL` | 로컬은 `postgres://dashboard@localhost:5433/marketing`, 배포 시 Supabase 주소 |
+| `DATABASE_URL` | 화면·동기화가 쓰는 DB. 로컬은 `postgres://dashboard@localhost:5433/marketing`, Supabase 는 Transaction pooler(포트 6543) 주소 |
+| `DIRECT_URL` | 마이그레이션 전용. Supabase Session pooler(포트 5432) 주소. 비우면 `DATABASE_URL` 을 쓴다 |
 | `GOOGLE_SHEET_ID` | 입력 시트 ID |
 
 서비스 계정 키는 `.secrets/google-service-account.json` (git 제외, 배포 시 `GOOGLE_SERVICE_ACCOUNT_JSON` 환경변수).

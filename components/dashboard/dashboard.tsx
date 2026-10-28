@@ -1,7 +1,6 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { useEffect } from "react";
 import { getClient } from "@/lib/clients";
 import type { Metrics } from "@/lib/build-metrics";
@@ -60,12 +59,9 @@ export function Dashboard({ client }: { client: ClientSlug }) {
     <div className="mx-auto w-full max-w-[1280px] px-4 pb-16 sm:px-6 lg:px-8">
       <header className="pt-6 pb-4 sm:pt-8">
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/"
-            className="text-t7 font-semibold text-subtle hover:text-body"
-          >
+          <span className="text-t7 font-semibold text-subtle">
             힐링브리즈 마케팅 대시보드
-          </Link>
+          </span>
           {data && (
             <span className="tabular inline-flex h-6 items-center rounded-md bg-surface px-2 text-st12 font-semibold text-body">
               {data.lastSyncedAt

@@ -14,7 +14,7 @@ import {
   ga4Daily,
   gscDaily,
   gscQueryDaily,
-  snsStats,
+  snsWeekly,
   syncRuns,
   youtubeVideos,
 } from "./schema";
@@ -108,7 +108,7 @@ export async function loadDbDataset(): Promise<{
     await Promise.all([
       db.select().from(adMetrics).where(gte(adMetrics.date, from)),
       db.select().from(creatives),
-      db.select().from(snsStats).where(gte(snsStats.weekStart, from)),
+      db.select().from(snsWeekly).where(gte(snsWeekly.weekStart, from)),
       db
         .select()
         .from(youtubeVideos)
@@ -186,7 +186,7 @@ export async function loadDbDataset(): Promise<{
       views: v.views,
       likes: v.likes,
       comments: v.comments,
-      isShort: v.isShort === 1,
+      isShort: v.isShort,
     })),
     sns: sns.map((s) => ({
       client: s.client,
