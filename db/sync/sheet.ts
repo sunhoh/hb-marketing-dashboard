@@ -1,10 +1,12 @@
 /**
- * 구글 시트 → DB 동기화. 시트가 원본이므로 source = "sheet" 인 행은 매번 시트 내용으로 통째로 교체한다
- * (시트에서 지운 줄은 DB 에서도 사라진다). API 로 들어온 행(meta_api 등)은 건드리지 않는다.
+ * 구글 시트 읽기 — 지금은 동기화에서 빠져 있다(2026-10-28).
+ * 매체_수동은 주 단위 숫자라 일 단위 표(ad_metrics)에 넣지 않는다. 시트를 다시 켤 때 주 단위 표
+ * (예: ad_manual_weekly)를 만들고 여기서 "source = sheet 인 행을 시트 내용으로 통째로 교체"하도록 붙인다.
+ * 그때까지는 시트를 읽고 검사만 한다.
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { adMetrics, syncRuns } from "@/db/schema";
+import { syncRuns } from "@/db/schema";
 import { SHEET_TABS } from "../sheet-spec";
 import { googleJwt } from "./google-auth";
 import { parseSheet, type Cell } from "./sheet-parse";
@@ -40,15 +42,6 @@ export async function syncSheet() {
   try {
     const parsed = parseSheet(await fetchTabs(sheetId));
     const counts = { 매체_수동: parsed.adMetrics.length };
-
-    // 머리글이 깨진 탭이면 DB 의 기존 값을 그대로 둔다
-    if (!parsed.skippedTabs.has("매체_수동")) {
-      await db.transaction(async (tx) => {
-        await tx.delete(adMetrics).where(eq(adMetrics.source, "sheet"));
-        if (parsed.adMetrics.length)
-          await tx.insert(adMetrics).values(parsed.adMetrics);
-      });
-    }
 
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     await db

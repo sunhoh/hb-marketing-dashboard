@@ -18,7 +18,6 @@ export const CLIENTS: {
     fullName: "지유의원 일산점",
     description: "피부과 · 일산점",
   },
-  // { slug: "cellora", name: "셀로라", fullName: "셀로라", description: "피부과 · 강남점" },
   {
     slug: "luho",
     name: "루호",
@@ -59,6 +58,35 @@ export const CONVERSION_LABELS: Record<string, string> = {
   "naver-brand": "전환",
   danggeun: "채팅 문의",
 };
+
+/** 메타 국가(db/schema.ts countryEnum) → 표에 쓰는 이름. 모르는 국가도 "기타 국가"로 묶어 보여 준다 */
+export const COUNTRY_LABELS: Record<string, string> = {
+  KR: "한국",
+  JP: "일본",
+  CN: "중국",
+  TW: "대만",
+  HK: "홍콩",
+  MO: "마카오",
+  SG: "싱가포르",
+  MY: "말레이시아",
+  ID: "인도네시아",
+  TH: "태국",
+  VN: "베트남",
+  PH: "필리핀",
+  US: "미국",
+  CA: "캐나다",
+  GB: "영국",
+  AU: "호주",
+  OTHER: "기타 국가",
+  UNKNOWN: "기타 국가",
+};
+
+/** 소재 형식(db/schema.ts creativeFormatEnum) → 화면 이름 */
+export const CREATIVE_FORMAT_LABELS = {
+  image: "이미지",
+  video: "영상",
+  carousel: "캐러셀",
+} as const;
 
 export const PLATFORM_LABELS = {
   instagram: "인스타그램",

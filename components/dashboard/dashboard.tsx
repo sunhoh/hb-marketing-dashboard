@@ -109,7 +109,7 @@ export function Dashboard({ client }: { client: ClientSlug }) {
 
       {data ? (
         <main className="mt-3 flex flex-col gap-3">
-          <SummaryCards data={data} isSms={client === "cellora"} />
+          <SummaryCards data={data} />
           <TrendChart data={data} />
           <ChannelTable data={data} />
           {data.web && (

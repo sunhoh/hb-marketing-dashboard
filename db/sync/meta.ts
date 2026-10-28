@@ -1,7 +1,7 @@
 /**
- * 메타 광고(Marketing API) → ad_metrics(일 단위, source = "meta_api") + creatives.
- *   · 채널 표: 광고 계정 × 국가 (segment = 국가 이름, account = act_…)
- *   · 소재 표: 광고 단위 (creative_id = 광고 ID)
+ * 메타 광고(Marketing API) → ad_metrics(날짜 × 광고 × 국가, source = "meta_api") + creatives.
+ * 한 번의 요청(level=ad, breakdowns=country)으로 받아서, 채널별 효율 표(국가로 묶음)와
+ * 소재 카드(광고로 묶음)가 같은 행을 다르게 더한다 — 두 화면의 합계가 항상 같다.
  * 클릭은 네이버와 기준을 맞추려고 링크 클릭(inline_link_clicks)을 쓴다.
  * 날짜는 광고 계정 시간대 기준이다(힐링브리즈 계정만 미국 LA 시간).
  *
@@ -10,7 +10,7 @@
  */
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { adMetrics, creatives, syncRuns } from "@/db/schema";
+import { adMetrics, creatives, syncRuns, type Country } from "@/db/schema";
 import { addDays } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
 
@@ -18,7 +18,7 @@ const API = "https://graph.facebook.com/v26.0";
 /** 메타는 전환을 최대 28일 늦게 확정하므로 매번 최근 며칠을 다시 가져온다 */
 const DEFAULT_DAYS = 35;
 export const MAX_DAYS = 365;
-/** 일별 × 국가/광고 행이 한 번에 너무 많지 않게 나눠 부른다 */
+/** 일별 × 광고 × 국가 행이 한 번에 너무 많지 않게 나눠 부른다 */
 const CHUNK_DAYS = 30;
 const INSERT_BATCH = 1000;
 
@@ -79,6 +79,7 @@ type InsightRow = {
   country?: string;
   ad_id?: string;
   ad_name?: string;
+  campaign_id?: string;
   campaign_name?: string;
 };
 type Paged<T> = { data: T[]; paging?: { next?: string } };
@@ -156,33 +157,37 @@ function conversionsOf(actions: Action[] | undefined) {
 }
 
 /**
- * 표에 따로 보여 줄 국가(타겟 국가). 여기에 없는 나라는 노출이 새어 나간 소액이라 "기타 국가"로 묶는다.
- * 새 나라를 타겟하면 여기에 추가하고 npm run sync -- --meta-days=365 로 다시 채운다.
+ * 따로 저장할 국가(db/schema.ts countryEnum). 여기에 없는 나라는 노출이 새어 나간 소액이라 OTHER 로 묶는다.
+ * 새 나라를 타겟하면 enum 과 여기에 추가하고 npm run sync -- --meta-days=365 로 다시 채운다.
  */
-const COUNTRY_LABELS: Record<string, string> = {
-  KR: "한국",
-  JP: "일본",
-  CN: "중국",
-  TW: "대만",
-  HK: "홍콩",
-  MO: "마카오",
-  SG: "싱가포르",
-  MY: "말레이시아",
-  ID: "인도네시아",
-  TH: "태국",
-  VN: "베트남",
-  PH: "필리핀",
-  US: "미국",
-  CA: "캐나다",
-  GB: "영국",
-  AU: "호주",
-};
-const OTHER_COUNTRIES = "기타 국가";
+const TRACKED_COUNTRIES = new Set<string>([
+  "KR",
+  "JP",
+  "CN",
+  "TW",
+  "HK",
+  "MO",
+  "SG",
+  "MY",
+  "ID",
+  "TH",
+  "VN",
+  "PH",
+  "US",
+  "CA",
+  "GB",
+  "AU",
+]);
 
-function formatOf(ad: AdInfo): "이미지" | "영상" | "캐러셀" {
+function countryOf(code: string | undefined): Country {
+  if (!code || code === "unknown") return "UNKNOWN";
+  return TRACKED_COUNTRIES.has(code) ? (code as Country) : "OTHER";
+}
+
+function formatOf(ad: AdInfo): "image" | "video" | "carousel" {
   if (ad.creative?.object_story_spec?.link_data?.child_attachments?.length)
-    return "캐러셀";
-  return ad.creative?.object_type === "VIDEO" ? "영상" : "이미지";
+    return "carousel";
+  return ad.creative?.object_type === "VIDEO" ? "video" : "image";
 }
 
 function seoulToday() {
@@ -209,9 +214,24 @@ export async function syncMeta(days = DEFAULT_DAYS) {
     .values({ source: "meta_api" })
     .returning({ id: syncRuns.id });
   try {
-    type Row = typeof adMetrics.$inferInsert;
-    const rows: Row[] = [];
-    const adNames = new Map<string, { name: string; client: ClientSlug }>();
+    type Row = typeof adMetrics.$inferInsert & {
+      spend: number;
+      impressions: number;
+      clicks: number;
+      conversions: number;
+    };
+    // 날짜 × 광고 × 국가. OTHER 로 묶이는 나라들은 한 줄로 합친다
+    const rows = new Map<string, Row>();
+    const ads = new Map<
+      string,
+      {
+        client: ClientSlug;
+        accountId: string;
+        campaignId: string;
+        campaignName: string;
+        name: string;
+      }
+    >();
     const report = new Map<
       string,
       {
@@ -236,80 +256,63 @@ export async function syncMeta(days = DEFAULT_DAYS) {
     };
 
     for (const acc of META_AD_ACCOUNTS) {
-      const base = (r: InsightRow) => ({
-        date: r.date_start,
-        granularity: "day" as const,
-        client:
-          CAMPAIGN_RULES.find((rule) => rule.match.test(r.campaign_name ?? ""))
-            ?.client ?? acc.client,
-        channel: "meta",
-        account: acc.id,
-        spend: Math.round(Number(r.spend ?? 0)),
-        impressions: Number(r.impressions ?? 0),
-        clicks: Number(r.inline_link_clicks ?? 0),
-        conversions: conversionsOf(r.actions),
-        source: "meta_api" as const,
-      });
-      const hasData = (r: Row) => r.spend || r.impressions || r.clicks;
-
       for (const range of ranges) {
-        // 채널 표: 국가별. 기타 국가는 날짜마다 한 줄로 합친다
-        const byCountry = new Map<
-          string,
-          Row & {
-            spend: number;
-            impressions: number;
-            clicks: number;
-            conversions: number;
-          }
-        >();
-        for (const r of await allPages<InsightRow>(
-          insightsUrl(acc.id, range, {
-            level: "campaign",
-            breakdowns: "country",
-            fields:
-              "campaign_name,spend,impressions,inline_link_clicks,actions",
-          }),
-        )) {
-          const segment = COUNTRY_LABELS[r.country ?? ""] ?? OTHER_COUNTRIES;
-          const row = base(r);
-          const key = `${row.date}|${row.client}|${segment}`;
-          const sum = byCountry.get(key);
-          if (!sum) {
-            byCountry.set(key, { ...row, segment });
-            continue;
-          }
-          sum.spend += row.spend;
-          sum.impressions += row.impressions;
-          sum.clicks += row.clicks;
-          sum.conversions += row.conversions;
-        }
-        for (const row of byCountry.values()) {
-          if (!hasData(row)) continue;
-          rows.push(row);
-          const rep = reportOf(acc.name, row.client);
-          rep.spend += row.spend;
-          rep.countries.add(row.segment!);
-        }
-        // 소재 표: 광고별
-        const adRows = await allPages<InsightRow>(
+        const insights = await allPages<InsightRow>(
           insightsUrl(acc.id, range, {
             level: "ad",
+            breakdowns: "country",
             fields:
-              "ad_id,ad_name,campaign_name,spend,impressions,inline_link_clicks,actions",
+              "ad_id,ad_name,campaign_id,campaign_name,spend,impressions,inline_link_clicks,actions",
           }),
         );
-        for (const r of adRows) {
-          const row = { ...base(r), segment: "", creativeId: r.ad_id! };
-          if (!hasData(row)) continue;
-          rows.push(row);
-          reportOf(acc.name, row.client).ads.add(r.ad_id!);
-          adNames.set(r.ad_id!, {
+        for (const r of insights) {
+          const client =
+            CAMPAIGN_RULES.find((rule) =>
+              rule.match.test(r.campaign_name ?? ""),
+            )?.client ?? acc.client;
+          const country = countryOf(r.country);
+          const key = `${r.date_start}|${r.ad_id}|${country}`;
+          const row = rows.get(key) ?? {
+            date: r.date_start,
+            client,
+            channel: "meta" as const,
+            accountId: acc.id,
+            campaignId: r.campaign_id!,
+            campaignName: r.campaign_name ?? r.campaign_id!,
+            creativeId: r.ad_id!,
+            country,
+            spend: 0,
+            impressions: 0,
+            clicks: 0,
+            conversions: 0,
+            source: "meta_api" as const,
+          };
+          // 원 단위 반올림은 저장할 때 한 번만(작은 금액이 여러 줄로 쪼개져도 합계가 메타와 맞게)
+          row.spend += Number(r.spend ?? 0);
+          row.impressions += Number(r.impressions ?? 0);
+          row.clicks += Number(r.inline_link_clicks ?? 0);
+          row.conversions += conversionsOf(r.actions);
+          rows.set(key, row);
+          ads.set(r.ad_id!, {
+            client,
+            accountId: acc.id,
+            campaignId: row.campaignId,
+            campaignName: row.campaignName,
             name: r.ad_name ?? r.ad_id!,
-            client: row.client,
           });
         }
       }
+    }
+
+    const values = [...rows.values()]
+      .map((r) => ({ ...r, spend: Math.round(r.spend) }))
+      .filter((r) => r.spend || r.impressions || r.clicks);
+    for (const r of values) {
+      const acc = META_AD_ACCOUNTS.find((a) => a.id === r.accountId)!;
+      const rep = reportOf(acc.name, r.client);
+      rep.spend += r.spend;
+      rep.countries.add(r.country!);
+      rep.ads.add(r.creativeId!);
     }
 
     // 소재 정보(형식·상태·썸네일). 계정의 광고 목록에서 찾고, 목록에 없는(지워진) 광고는 하나씩 조회한다
@@ -340,9 +343,9 @@ export async function syncMeta(days = DEFAULT_DAYS) {
           ]),
         })}`,
       );
-      for (const ad of list) if (adNames.has(ad.id)) infos.set(ad.id, ad);
+      for (const ad of list) if (ads.has(ad.id)) infos.set(ad.id, ad);
     }
-    for (const id of adNames.keys()) {
+    for (const id of ads.keys()) {
       if (infos.has(id)) continue;
       try {
         infos.set(id, await graph<AdInfo>(`${API}/${id}?fields=${adFields}`));
@@ -352,26 +355,17 @@ export async function syncMeta(days = DEFAULT_DAYS) {
     }
 
     await db.transaction(async (tx) => {
-      // 가져온 기간의 메타 행은 통째로 교체(광고가 꺼지거나 계정 설정이 바뀐 경우도 맞게)
-      await tx
-        .delete(adMetrics)
-        .where(
-          and(
-            eq(adMetrics.source, "meta_api"),
-            gte(adMetrics.date, since),
-            sql`${adMetrics.date} <= ${until}`,
-          ),
-        );
-      for (let i = 0; i < rows.length; i += INSERT_BATCH)
-        await tx.insert(adMetrics).values(rows.slice(i, i + INSERT_BATCH));
-
-      for (const [id, { name, client }] of adNames) {
+      // 소재를 먼저 넣어야 ad_metrics.creative_id 가 가리킬 수 있다
+      for (const [id, ad] of ads) {
         const info = infos.get(id);
         const row = {
           id,
-          client,
-          channel: "meta",
-          name: info?.name ?? name,
+          client: ad.client,
+          channel: "meta" as const,
+          accountId: ad.accountId,
+          campaignId: ad.campaignId,
+          campaignName: ad.campaignName,
+          name: info?.name ?? ad.name,
           format: info ? formatOf(info) : null,
           status: info?.effective_status ?? null,
           thumbnailUrl: info?.creative?.thumbnail_url ?? null,
@@ -384,6 +378,18 @@ export async function syncMeta(days = DEFAULT_DAYS) {
             set: { ...row, updatedAt: sql`now()` },
           });
       }
+      // 가져온 기간의 메타 행은 통째로 교체(광고가 꺼지거나 계정 설정이 바뀐 경우도 맞게)
+      await tx
+        .delete(adMetrics)
+        .where(
+          and(
+            eq(adMetrics.source, "meta_api"),
+            gte(adMetrics.date, since),
+            sql`${adMetrics.date} <= ${until}`,
+          ),
+        );
+      for (let i = 0; i < values.length; i += INSERT_BATCH)
+        await tx.insert(adMetrics).values(values.slice(i, i + INSERT_BATCH));
     });
 
     await db
@@ -391,13 +397,13 @@ export async function syncMeta(days = DEFAULT_DAYS) {
       .set({
         status: "success",
         finishedAt: new Date(),
-        rowsUpserted: rows.length,
+        rowsUpserted: values.length,
       })
       .where(eq(syncRuns.id, run.id));
     return {
       since,
       until,
-      rows: rows.length,
+      rows: values.length,
       accounts: [...report.values()].map((r) => ({
         ...r,
         countries: r.countries.size,

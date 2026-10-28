@@ -1,4 +1,5 @@
-export type ClientSlug = "gu-gangnam" | "gu-ilsan" | "luho" | "cellora";
+/** db/schema.ts 의 clientEnum 과 같은 값 */
+export type ClientSlug = "gu-gangnam" | "gu-ilsan" | "luho";
 export type PeriodKey = "this-month" | "last-month" | "last-12-weeks";
 
 /** 매체 원본 레코드 — 파생 지표(CTR·CPC·CPM)는 저장하지 않는다 */
@@ -17,7 +18,7 @@ export type Creative = {
   id: string;
   client: ClientSlug;
   name: string;
-  format: "이미지" | "영상" | "캐러셀";
+  format: "이미지" | "영상" | "캐러셀" | "—"; // 모르면 —
 };
 
 export type SnsStat = {

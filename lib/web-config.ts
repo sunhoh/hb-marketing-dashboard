@@ -8,7 +8,6 @@ export const CONVERSION_EVENTS: Record<ClientSlug, string[]> = {
   "gu-gangnam": ["booking_complete", "팝업_카카오", "팝업_전화"],
   "gu-ilsan": ["booking_complete"],
   luho: ["reservation_complete", "contact_click"],
-  cellora: [],
 };
 
 /** GA4 유입(소스 / 매체) → 화면 이름. 없으면 원래 값을 그대로 보여 준다 */

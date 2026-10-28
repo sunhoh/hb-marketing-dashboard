@@ -22,7 +22,6 @@ const GA4_PROPERTIES: Record<ClientSlug, string | null> = {
   "gu-gangnam": "293101505",
   "gu-ilsan": "460229156",
   luho: "557924179",
-  cellora: null,
 };
 
 

@@ -1,8 +1,8 @@
 /**
- * 네이버 검색광고 API → ad_metrics (일 단위, source = "naver_api").
+ * 네이버 검색광고 API → ad_metrics(날짜 × 캠페인, 지점이 광고그룹으로 나뉜 캠페인은 × 광고그룹, source = "naver_api").
  * 광고 계정 하나(gu_clinic)에 여러 지점이 섞여 있어서 이름 규칙(NAME_RULES)으로 클라이언트를 나눈다.
  * 캠페인 이름에 지점이 없으면(예: "플레이스 검색광고") 광고그룹에 연결된 업체(비즈채널) → 광고그룹 이름 순으로 나눈다.
- * 표에서 광고주센터와 줄마다 맞춰 볼 수 있게 세그먼트에 캠페인(/광고그룹) 이름을 넣는다.
+ * 캠페인·광고그룹 ID 와 이름을 함께 저장해서, 표에서 광고주센터와 줄마다 맞춰 볼 수 있다.
  * 어느 규칙에도 안 걸리거나 제외 목록에 있으면 가져오지 않고 이름·유형·금액만 알려 준다.
  *
  * .env.local
@@ -13,7 +13,7 @@
 import { createHmac } from "node:crypto";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { adMetrics, syncRuns } from "@/db/schema";
+import { adMetrics, syncRuns, type AdChannel } from "@/db/schema";
 import { addDays } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export const MAX_DAYS = 365;
 /** /stats 한 번에 조회할 수 있는 최대 일수(92일)보다 조금 작게 나눠 부른다 */
 const CHUNK_DAYS = 90;
 /** 네이버 캠페인 유형 → 대시보드 채널 */
-const CHANNEL_BY_CAMPAIGN_TYPE: Record<string, string> = {
+const CHANNEL_BY_CAMPAIGN_TYPE: Record<string, AdChannel> = {
   WEB_SITE: "naver-search", // 파워링크
   BRAND_SEARCH: "naver-brand", // 브랜드검색(계약형이라 일별 비용이 0 으로 올 수 있음)
   PLACE: "naver-place",
@@ -35,7 +35,6 @@ const CHANNEL_BY_CAMPAIGN_TYPE: Record<string, string> = {
 const NAME_RULES: { match: RegExp; client: ClientSlug }[] = [
   { match: /일산/, client: "gu-ilsan" },
   { match: /강남/, client: "gu-gangnam" },
-  // { match: /셀로라/, client: "cellora" },
 ];
 
 /**
@@ -69,9 +68,13 @@ type BizChannel = { nccBusinessChannelId: string; name: string };
 type Unit = {
   id: string;
   label: string;
+  campaignId: string;
+  campaignName: string;
+  adgroupId?: string;
+  adgroupName?: string;
   type: string;
   status?: string;
-  target: { client: ClientSlug; channel: string } | null;
+  target: { client: ClientSlug; channel: AdChannel } | null;
   excluded?: boolean;
 };
 
@@ -163,7 +166,12 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
     const units: Unit[] = [];
     for (const c of campaigns) {
       const channel = CHANNEL_BY_CAMPAIGN_TYPE[c.campaignTp];
-      const base = { type: c.campaignTp, status: c.status };
+      const base = {
+        type: c.campaignTp,
+        status: c.status,
+        campaignId: c.nccCampaignId,
+        campaignName: c.name,
+      };
       if (EXCLUDED_CAMPAIGNS.some((r) => r.test(c.name))) {
         units.push({
           ...base,
@@ -206,6 +214,10 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
           status: g.status,
           id: g.nccAdgroupId,
           label: `${c.name} / ${g.name}`,
+          campaignId: c.nccCampaignId,
+          campaignName: c.name,
+          adgroupId: g.nccAdgroupId,
+          adgroupName: g.name,
           target: gc ? { client: gc, channel } : null,
         });
       }
@@ -231,50 +243,31 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
       statsById.set(u.id, rows);
     }
 
-    // 캠페인(/광고그룹)별 일 단위 행. 같은 이름이 둘이면 합친다
-    const byDay = new Map<
-      string,
-      {
-        date: string;
-        client: ClientSlug;
-        channel: string;
-        segment: string;
-        spend: number;
-        impressions: number;
-        clicks: number;
-        conversions: number;
-      }
-    >();
-    for (const { id, target, label } of units) {
-      if (!target) continue;
-      for (const s of statsById.get(id) ?? []) {
-        const date = (s.dateStart ?? s.date ?? "").slice(0, 10);
-        if (!date) continue;
-        const key = `${date}|${target.client}|${target.channel}|${label}`;
-        const acc = byDay.get(key) ?? {
+    // 캠페인(/광고그룹)별 일 단위 행
+    const rows: (typeof adMetrics.$inferInsert)[] = [];
+    for (const u of units) {
+      if (!u.target) continue;
+      for (const st of statsById.get(u.id) ?? []) {
+        const date = (st.dateStart ?? st.date ?? "").slice(0, 10);
+        const row = {
           date,
-          ...target,
-          segment: label,
-          spend: 0,
-          impressions: 0,
-          clicks: 0,
-          conversions: 0,
+          ...u.target,
+          accountId: customerId,
+          campaignId: u.campaignId,
+          campaignName: u.campaignName,
+          adgroupId: u.adgroupId ?? null,
+          adgroupName: u.adgroupName ?? null,
+          spend: Math.round(st.salesAmt ?? 0),
+          impressions: st.impCnt ?? 0,
+          clicks: st.clkCnt ?? 0,
+          conversions: st.ccnt ?? 0,
+          source: "naver_api" as const,
         };
-        acc.spend += Math.round(s.salesAmt ?? 0);
-        acc.impressions += s.impCnt ?? 0;
-        acc.clicks += s.clkCnt ?? 0;
-        acc.conversions += s.ccnt ?? 0;
-        byDay.set(key, acc);
+        // 노출·클릭·비용이 모두 0 인 날(중지된 캠페인 등)은 표에 ₩0 행만 늘리므로 넣지 않는다
+        if (date && (row.spend || row.impressions || row.clicks))
+          rows.push(row);
       }
     }
-    // 노출·클릭·비용이 모두 0 인 날(중지된 캠페인 등)은 표에 ₩0 행만 늘리므로 넣지 않는다
-    const rows = [...byDay.values()]
-      .filter((d) => d.spend || d.impressions || d.clicks)
-      .map((d) => ({
-        ...d,
-        granularity: "day" as const,
-        source: "naver_api" as const,
-      }));
 
     await db.transaction(async (tx) => {
       // 가져온 기간의 네이버 행은 통째로 교체(캠페인이 꺼지거나 규칙이 바뀐 경우도 맞게)

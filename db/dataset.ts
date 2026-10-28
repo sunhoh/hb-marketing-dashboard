@@ -4,6 +4,7 @@
 import "server-only";
 import { desc, eq, gte } from "drizzle-orm";
 import type { Dataset } from "@/lib/build-metrics";
+import { COUNTRY_LABELS, CREATIVE_FORMAT_LABELS } from "@/lib/clients";
 import { mondayOf, weeksUntil } from "@/lib/periods";
 import type { Creative, WeeklyMetric } from "@/lib/types";
 import { db } from ".";
@@ -33,6 +34,12 @@ function seoulToday() {
 
 type AdRow = typeof adMetrics.$inferSelect;
 
+/** 채널별 효율 표의 "세부": 메타는 국가, 네이버는 캠페인(/광고그룹) 이름 */
+function segmentOf(r: AdRow) {
+  if (r.country) return COUNTRY_LABELS[r.country];
+  return r.adgroupName ? `${r.campaignName} / ${r.adgroupName}` : r.campaignName;
+}
+
 /** 일 단위 행을 (키 + 주) 로 묶어 숫자 칸을 더한다 */
 function sumByWeek<T extends { date: string }, K extends keyof T>(
   rows: T[],
@@ -60,7 +67,7 @@ function toWeekly(
 ): WeeklyMetric[] {
   const map = new Map<string, WeeklyMetric & { hasConv: boolean }>();
   for (const r of rows) {
-    const weekStart = r.granularity === "week" ? r.date : mondayOf(r.date);
+    const weekStart = mondayOf(r.date);
     const segment = keyOf(r);
     const key = [weekStart, r.client, r.channel, segment ?? ""].join("|");
     const acc = map.get(key) ?? {
@@ -119,23 +126,23 @@ export async function loadDbDataset(): Promise<{
         .limit(1),
     ]);
 
-  const channelRows = ads.filter((r) => r.creativeId === "");
-  const creativeRowsOnly = ads.filter((r) => r.creativeId !== "");
-
   const dataset: Dataset = {
     today,
     weeks,
-    weekly: toWeekly(channelRows, (r) => r.segment || undefined),
+    // 같은 행을 표는 세부(국가·캠페인)로, 소재 카드는 소재로 묶는다
+    weekly: toWeekly(ads, segmentOf),
     creatives: creativeRows.map(
-      (c): Creative =>
-        ({
-          id: c.id,
-          client: c.client,
-          name: c.name,
-          format: c.format ?? "—",
-        }) as Creative,
+      (c): Creative => ({
+        id: c.id,
+        client: c.client,
+        name: c.name,
+        format: c.format ? CREATIVE_FORMAT_LABELS[c.format] : "—",
+      }),
     ),
-    creativeWeekly: toWeekly(creativeRowsOnly, (r) => r.creativeId),
+    creativeWeekly: toWeekly(
+      ads.filter((r) => r.creativeId !== null),
+      (r) => r.creativeId!,
+    ),
     ga4: sumByWeek(ga4Rows, (r) => [r.client, r.sourceMedium], [
       "sessions",
       "newUsers",

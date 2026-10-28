@@ -4,10 +4,10 @@ import { Delta } from "./primitives";
 
 type CardDef = { key: MetricKey; label: string; format: (v: number | null) => string; hint?: string };
 
-export function SummaryCards({ data, isSms }: { data: Metrics; isSms: boolean }) {
+export function SummaryCards({ data }: { data: Metrics }) {
   const cards: CardDef[] = [
     { key: "spend", label: "소진액", format: formatWon },
-    { key: "impressions", label: isSms ? "발송 수" : "노출", format: formatNumber },
+    { key: "impressions", label: "노출", format: formatNumber },
     { key: "clicks", label: "클릭", format: formatNumber },
     { key: "ctr", label: "CTR", format: (v) => formatPercent(v), hint: "클릭 ÷ 노출" },
     { key: "cpc", label: "CPC", format: formatWon, hint: "낮을수록 좋음" },

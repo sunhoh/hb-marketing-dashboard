@@ -50,6 +50,34 @@
       "when": 1793171023271,
       "tag": "0006_drop_place_viral",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793173274244,
+      "tag": "0007_ad_daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793175003207,
+      "tag": "0008_drop_old_ad_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793175057085,
+      "tag": "0009_rename_ad_daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793175074069,
+      "tag": "0010_rename_ad_metrics_pkey",
+      "breakpoints": true
     }
   ]
 }

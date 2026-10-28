@@ -85,9 +85,7 @@ export function CreativeRanking({ data }: { data: Metrics }) {
     >
       {rows.length === 0 ? (
         <EmptyState>
-          {data.client === "gu-ilsan" || data.client === "cellora"
-            ? "이 클라이언트는 메타 소재 광고를 운영하지 않아요"
-            : "선택한 기간에 소재 데이터가 없어요"}
+          선택한 기간에 소재 데이터가 없어요
         </EmptyState>
       ) : (
         // 정렬 기준을 바꾸면 key로 다시 마운트돼 스크롤이 맨 위로 돌아감
