@@ -14,7 +14,7 @@ npm run db:stop    # 로컬 Postgres 끄기
 
 | 명령 | 하는 일 |
 |---|---|
-| `npm run sync` | 구글 시트 + 네이버 검색광고 + 메타 광고·인스타그램 + 유튜브 + GA4·서치 콘솔 → DB |
+| `npm run sync` | 네이버 검색광고 + 메타 광고·인스타그램 + 유튜브 + GA4·서치 콘솔 → DB |
 | `npm run db:migrate` | 스키마(`db/schema.ts`) 변경을 DB에 적용 (`db:generate` 로 마이그레이션 생성 후) |
 | `npm run sheet:template` | 시트 입력 양식(xlsx) 다시 만들기 |
 

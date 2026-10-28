@@ -40,12 +40,12 @@ export const adMetrics = pgTable(
     date: date("date").notNull(),
     granularity: text("granularity").$type<"day" | "week">().notNull(),
     client: client(),
-    channel: text("channel").notNull(), // meta, gangnam-unni, creatrip, naver-place, danggeun, kakao-sms
+    channel: text("channel").notNull(), // meta, naver-search, naver-brand, naver-place, gangnam-unni, creatrip, danggeun
     segment: text("segment").notNull().default(""), // 국가 / 국가 등급. 없으면 ""
     creativeId: text("creative_id").notNull().default(""), // 소재 단위 행만 채움
     account: text("account").notNull().default(""), // 매체 광고 계정 ID(메타 act_…). 같은 국가가 여러 계정에서 올 수 있어서 키에 넣는다
     spend: bigint("spend", { mode: "number" }).notNull(), // 원
-    impressions: integer("impressions").notNull(), // 카톡·문자는 발송 수
+    impressions: integer("impressions").notNull(),
     clicks: integer("clicks").notNull(),
     conversions: integer("conversions"), // 매체 전환. 매체가 주지 않으면 null
     source: source(),
@@ -77,55 +77,6 @@ export const creatives = pgTable("creatives", {
   thumbnailUrl: text("thumbnail_url"),
   updatedAt: syncedAt(),
 });
-
-/** 플레이스 키워드 순위(주 1회 기록). 순위권 밖이면 rank = null */
-export const placeRanks = pgTable(
-  "place_ranks",
-  {
-    id: serial("id").primaryKey(),
-    weekStart: date("week_start").notNull(),
-    client: client(),
-    keyword: text("keyword").notNull(),
-    rank: integer("rank"),
-    source: source(),
-    syncedAt: syncedAt(),
-  },
-  (t) => [unique("place_ranks_key").on(t.weekStart, t.client, t.keyword)],
-);
-
-/** 플레이스 리뷰·평점·저장 수(주 마지막 날 기준 누적값) */
-export const placeStats = pgTable(
-  "place_stats",
-  {
-    id: serial("id").primaryKey(),
-    weekStart: date("week_start").notNull(),
-    client: client(),
-    reviews: integer("reviews").notNull(),
-    rating: numeric("rating", { precision: 3, scale: 2, mode: "number" }),
-    saves: integer("saves"),
-    source: source(),
-    syncedAt: syncedAt(),
-  },
-  (t) => [unique("place_stats_key").on(t.weekStart, t.client)],
-);
-
-/** 바이럴 발행 글. 한 줄 = 글 하나. 발행 수·상위노출 키워드 수는 집계해서 만든다 */
-export const viralPosts = pgTable(
-  "viral_posts",
-  {
-    id: serial("id").primaryKey(),
-    publishedOn: date("published_on").notNull(),
-    client: client(),
-    platform: text("platform").notNull(), // 블로그 / 카페 등
-    url: text("url").notNull(),
-    keyword: text("keyword"),
-    topExposed: integer("top_exposed").notNull().default(0), // 상위노출 1, 아니면 0
-    checkedOn: date("checked_on"), // 상위노출을 확인한 날
-    source: source(),
-    syncedAt: syncedAt(),
-  },
-  (t) => [unique("viral_posts_url").on(t.url)],
-);
 
 /**
  * SNS 팔로워(주 마지막 날 기준)와 그 주 조회수.

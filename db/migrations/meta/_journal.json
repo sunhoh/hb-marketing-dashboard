@@ -43,6 +43,13 @@
       "when": 1793167255799,
       "tag": "0005_sns_account",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793171023271,
+      "tag": "0006_drop_place_viral",
+      "breakpoints": true
     }
   ]
 }

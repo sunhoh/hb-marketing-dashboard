@@ -17,10 +17,8 @@ const NOTE_COLOR = "FF6B7684"; // TDS grey600
 
 const NUM_FMT: Partial<Record<ColumnKind, string>> = {
   monday: "yyyy-mm-dd",
-  date: "yyyy-mm-dd",
   won: "#,##0",
   int: "#,##0",
-  rating: "0.00",
 };
 
 /** exceljs 런타임에는 있지만 타입 정의에서 빠진 범위 단위 검사 API */
@@ -41,19 +39,12 @@ function validation(c: SheetColumn, cell: string): ExcelJS.DataValidation | unde
   switch (c.kind) {
     case "client":
     case "channel":
-    case "platform":
-    case "viralPlatform":
-    case "ox":
       return { ...base, type: "list", formulae: [listRef(c.kind)], error: "목록에서 골라 주세요" };
     case "monday":
       return { ...base, type: "custom", formulae: [`AND(ISNUMBER(${cell}),WEEKDAY(${cell},2)=1)`], error: "월요일 날짜(YYYY-MM-DD)를 적어 주세요" };
-    case "date":
-      return { ...base, type: "date", operator: "greaterThan", formulae: [new Date(2024, 0, 1)], error: "날짜(YYYY-MM-DD)를 적어 주세요" };
     case "won":
     case "int":
       return { ...base, type: "whole", operator: "greaterThanOrEqual", formulae: [0], error: "0 이상의 정수를 적어 주세요(콤마·₩ 없이)" };
-    case "rating":
-      return { ...base, type: "decimal", operator: "between", formulae: [0, 5], error: "0~5 사이 숫자를 적어 주세요" };
     default:
       return undefined;
   }
@@ -81,7 +72,6 @@ const guideRows: [string, string][] = [
   ...SHEET_TABS.map((t): [string, string] => [t.name, t.description]),
   ["", ""],
   ["예시 (매체_수동)", "2026-10-19 | GU강남 | 강남언니 | (비움) | 1100000 | 78500 | 1890 | 170"],
-  ["예시 (바이럴)", "2026-10-21 | GU일산 | 블로그 | https://blog.naver.com/... | 일산 여드름 | O | 2026-10-24"],
 ];
 guideRows.forEach((r) => guide.addRow(r));
 guide.getCell("A1").font = { bold: true, size: 16 };
@@ -117,7 +107,7 @@ for (const tab of SHEET_TABS) {
 // 드롭다운 목록 탭 — 클라이언트·채널이 늘면 여기에 추가
 const lists = wb.addWorksheet(LIST_SHEET);
 lists.columns = listColumns.map((k) => ({
-  header: { client: "클라이언트", channel: "채널(수기)", platform: "SNS 플랫폼", viralPlatform: "바이럴 플랫폼", ox: "상위노출" }[k],
+  header: { client: "클라이언트", channel: "채널(수기)" }[k],
   width: 16,
 }));
 listColumns.forEach((k, col) => LISTS[k].forEach((v, i) => (lists.getCell(i + 2, col + 1).value = v)));

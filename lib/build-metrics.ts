@@ -9,11 +9,8 @@ import type {
   ClientSlug,
   Creative,
   PeriodKey,
-  PlaceKeywordRank,
-  PlaceStat,
   SnsStat,
   VideoStat,
-  ViralStat,
   WeeklyMetric,
 } from "./types";
 
@@ -24,10 +21,6 @@ export type Dataset = {
   weekly: WeeklyMetric[]; // 채널·세그먼트 단위
   creatives: Creative[];
   creativeWeekly: WeeklyMetric[]; // 소재 단위, segment = 소재 ID
-  placeKeywords: string[];
-  placeRanks: PlaceKeywordRank[];
-  placeStats: PlaceStat[];
-  viral: ViralStat[];
   sns: SnsStat[];
   videos: VideoStat[];
   ga4: {
@@ -249,59 +242,7 @@ export function buildMetrics(
   }
 
   // 오가닉
-  const showPlace = client === "gu-ilsan";
   const prevLastWeek = weeks.previous[weeks.previous.length - 1];
-  const placeAt = (w: string | undefined) =>
-    ds.placeStats.find((s) => s.weekStart === w);
-  const placeCurrent = placeAt(lastWeek);
-  const place =
-    showPlace && placeCurrent
-      ? {
-          keywords: ds.placeKeywords.map((keyword) => {
-            const rank = (w: string) =>
-              ds.placeRanks.find(
-                (r) => r.keyword === keyword && r.weekStart === w,
-              )?.rank ?? null;
-            return {
-              keyword,
-              rank: lastWeek ? rank(lastWeek) : null,
-              previousRank: prevLastWeek ? rank(prevLastWeek) : null,
-            };
-          }),
-          rankTrend: trendWeeks.map((weekStart) => ({
-            weekStart,
-            ...Object.fromEntries(
-              ds.placeKeywords.map((k) => [
-                k,
-                ds.placeRanks.find(
-                  (r) => r.keyword === k && r.weekStart === weekStart,
-                )?.rank,
-              ]),
-            ),
-          })) as ({ weekStart: string } & Record<string, number>)[],
-          current: placeCurrent,
-          previous: prevLastWeek ? (placeAt(prevLastWeek) ?? null) : null,
-        }
-      : null;
-
-  const viralRows = byClient(ds.viral, client);
-  const sumViral = (rows: typeof viralRows) =>
-    rows.reduce(
-      (a, r) => ({
-        published: a.published + r.published,
-        topKeywords: a.topKeywords + r.topKeywords,
-      }),
-      {
-        published: 0,
-        topKeywords: 0,
-      },
-    );
-  const viral = viralRows.length
-    ? {
-        current: sumViral(inWeeks(viralRows, weeks.current)),
-        previous: sumViral(inWeeks(viralRows, weeks.previous)),
-      }
-    : null;
 
   const snsRows = byClient(ds.sns, client);
   const sns = [
@@ -473,6 +414,6 @@ export function buildMetrics(
     channels,
     creatives,
     web,
-    organic: { place, viral, sns, youtube, search },
+    organic: { sns, youtube, search },
   };
 }

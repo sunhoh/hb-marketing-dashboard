@@ -6,10 +6,25 @@ export const CLIENTS: {
   fullName: string;
   description: string;
 }[] = [
-  { slug: "gu-gangnam", name: "GU강남", fullName: "지유의원 강남점", description: "피부과 · 강남점" },
-  { slug: "gu-ilsan", name: "GU일산", fullName: "지유의원 일산점", description: "피부과 · 일산점" },
+  {
+    slug: "gu-gangnam",
+    name: "GU강남",
+    fullName: "지유의원 강남점",
+    description: "피부과 · 강남점",
+  },
+  {
+    slug: "gu-ilsan",
+    name: "GU일산",
+    fullName: "지유의원 일산점",
+    description: "피부과 · 일산점",
+  },
   // { slug: "cellora", name: "셀로라", fullName: "셀로라", description: "피부과 · 강남점" },
-  { slug: "luho", name: "루호", fullName: "루호성형외과", description: "성형외과 · 신사점" },
+  {
+    slug: "luho",
+    name: "루호",
+    fullName: "루호성형외과",
+    description: "성형외과 · 신사점",
+  },
 ];
 
 export const CLIENT_SLUGS = CLIENTS.map((c) => c.slug);
@@ -19,7 +34,9 @@ export function getClient(slug: string) {
 }
 
 export function isClientSlug(value: unknown): value is ClientSlug {
-  return typeof value === "string" && CLIENT_SLUGS.includes(value as ClientSlug);
+  return (
+    typeof value === "string" && CLIENT_SLUGS.includes(value as ClientSlug)
+  );
 }
 
 export const CHANNEL_LABELS: Record<string, string> = {
@@ -30,7 +47,6 @@ export const CHANNEL_LABELS: Record<string, string> = {
   "naver-search": "네이버 파워링크",
   "naver-brand": "네이버 브랜드검색",
   danggeun: "당근",
-  "kakao-sms": "카톡·문자",
 };
 
 /** 매체 전환이 무엇을 뜻하는지 채널별로 표시 */
@@ -42,7 +58,6 @@ export const CONVERSION_LABELS: Record<string, string> = {
   "naver-search": "전환",
   "naver-brand": "전환",
   danggeun: "채팅 문의",
-  "kakao-sms": "링크 전환",
 };
 
 export const PLATFORM_LABELS = {

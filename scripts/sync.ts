@@ -1,6 +1,6 @@
 /**
  * 실제 데이터 가져오기.  npm run sync
- * 구글 시트 + 설정된 매체 API. 한 출처가 실패해도 나머지는 계속한다. 화면의 [동기화] 버튼과 같은 코드(db/sync/run-all.ts).
+ * 설정된 매체 API(구글 시트는 잠시 제외). 한 출처가 실패해도 나머지는 계속한다. 화면의 [동기화] 버튼과 같은 코드(db/sync/run-all.ts).
  *
  * 처음 한 번 과거를 채울 때:
  *   npm run sync -- --naver-days=365 --meta-days=365 --instagram-weeks=52 --google-days=400

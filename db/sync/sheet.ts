@@ -4,14 +4,7 @@
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  adMetrics,
-  placeRanks,
-  placeStats,
-  snsStats,
-  syncRuns,
-  viralPosts,
-} from "@/db/schema";
+import { adMetrics, syncRuns } from "@/db/schema";
 import { SHEET_TABS } from "../sheet-spec";
 import { googleJwt } from "./google-auth";
 import { parseSheet, type Cell } from "./sheet-parse";
@@ -46,37 +39,16 @@ export async function syncSheet() {
     .returning({ id: syncRuns.id });
   try {
     const parsed = parseSheet(await fetchTabs(sheetId));
-    const counts = {
-      매체_수동: parsed.adMetrics.length,
-      플레이스_순위: parsed.placeRanks.length,
-      플레이스_지표: parsed.placeStats.length,
-      바이럴: parsed.viralPosts.length,
-      SNS: parsed.snsStats.length,
-    };
+    const counts = { 매체_수동: parsed.adMetrics.length };
 
-    await db.transaction(async (tx) => {
-      const replace = async <
-        T extends
-          | typeof adMetrics
-          | typeof placeRanks
-          | typeof placeStats
-          | typeof viralPosts
-          | typeof snsStats,
-      >(
-        tab: string,
-        table: T,
-        rows: T["$inferInsert"][],
-      ) => {
-        if (parsed.skippedTabs.has(tab)) return;
-        await tx.delete(table).where(eq(table.source, "sheet"));
-        if (rows.length) await tx.insert(table).values(rows as never);
-      };
-      await replace("매체_수동", adMetrics, parsed.adMetrics);
-      await replace("플레이스_순위", placeRanks, parsed.placeRanks);
-      await replace("플레이스_지표", placeStats, parsed.placeStats);
-      await replace("바이럴", viralPosts, parsed.viralPosts);
-      await replace("SNS", snsStats, parsed.snsStats);
-    });
+    // 머리글이 깨진 탭이면 DB 의 기존 값을 그대로 둔다
+    if (!parsed.skippedTabs.has("매체_수동")) {
+      await db.transaction(async (tx) => {
+        await tx.delete(adMetrics).where(eq(adMetrics.source, "sheet"));
+        if (parsed.adMetrics.length)
+          await tx.insert(adMetrics).values(parsed.adMetrics);
+      });
+    }
 
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     await db

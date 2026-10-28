@@ -8,7 +8,6 @@ import { syncGoogle } from "./google";
 import { isInstagramConfigured, syncInstagram } from "./instagram";
 import { isMetaConfigured, syncMeta } from "./meta";
 import { isNaverSearchAdConfigured, syncNaverSearchAd } from "./naver-searchad";
-import { syncSheet } from "./sheet";
 import { isYoutubeConfigured, syncYoutube } from "./youtube";
 
 /** 비우면 각 출처의 기본값(최근 며칠·몇 주)을 쓴다. 과거를 채울 때만 터미널에서 넘긴다 */
@@ -19,8 +18,11 @@ export type SyncOptions = {
   googleDays?: number;
 };
 
+/**
+ * 구글 시트(매체_수동)는 팀 결정으로 잠시 뺐다(2026-10-28). 코드는 db/sync/sheet.ts 에 그대로 있어서
+ * 다시 넣으려면 여기에 { key: "sheet", label: "구글 시트" } 와 runStep 의 case 를 되살리면 된다.
+ */
 export const SYNC_STEPS = [
-  { key: "sheet", label: "구글 시트" },
   { key: "naver", label: "네이버 검색광고" },
   { key: "meta", label: "메타 광고" },
   { key: "google", label: "GA4 · 서치 콘솔" },
@@ -44,16 +46,6 @@ async function runStep(
   opts: SyncOptions,
 ): Promise<string[] | null> {
   switch (key) {
-    case "sheet": {
-      const { counts, issues } = await syncSheet();
-      const lines = Object.entries(counts).map(([tab, n]) => `${tab}: ${n}줄`);
-      if (issues.length) {
-        lines.push(`확인이 필요한 줄 ${issues.length}개 (건너뜀):`);
-        for (const i of issues)
-          lines.push(`  · ${i.tab}${i.row ? ` ${i.row}행` : ""}: ${i.message}`);
-      }
-      return lines;
-    }
     case "naver": {
       if (!isNaverSearchAdConfigured()) return null;
       const { since, until, rows, campaigns } = await syncNaverSearchAd(

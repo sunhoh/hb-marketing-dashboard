@@ -12,8 +12,20 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useMemo } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BASELINE_TOLERANCE, BASELINE_WEEKS, type ChannelRow, type Metrics } from "@/lib/build-metrics";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  BASELINE_TOLERANCE,
+  BASELINE_WEEKS,
+  type ChannelRow,
+  type Metrics,
+} from "@/lib/build-metrics";
 import { formatNumber, formatPercent, formatWon } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 import { EmptyState, Section } from "./primitives";
@@ -23,11 +35,14 @@ function isWorse(row: ChannelRow, key: "ctr" | "cpc" | "cpm") {
   const v = row[key];
   const base = row.baseline[key];
   if (v === null || base === null) return false;
-  return key === "ctr" ? v < base * (1 - BASELINE_TOLERANCE) : v > base * (1 + BASELINE_TOLERANCE);
+  return key === "ctr"
+    ? v < base * (1 - BASELINE_TOLERANCE)
+    : v > base * (1 + BASELINE_TOLERANCE);
 }
 
 type ColumnMeta = { numeric?: boolean; flag?: "ctr" | "cpc" | "cpm" };
-type NumericKey = "spend" | "impressions" | "clicks" | "conversions" | "ctr" | "cpc" | "cpm";
+type NumericKey =
+  "spend" | "impressions" | "clicks" | "conversions" | "ctr" | "cpc" | "cpm";
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -49,14 +64,21 @@ const numericSort: SortFn<typeof features, ChannelRow> = (a, b, id) => {
 
 export function ChannelTable({ data }: { data: Metrics }) {
   const columns = useMemo<Col[]>(() => {
-    const num = (key: NumericKey, header: string, format: (v: number | null) => string): Col => ({
+    const num = (
+      key: NumericKey,
+      header: string,
+      format: (v: number | null) => string,
+    ): Col => ({
       id: key,
       accessorFn: (r) => r[key],
       header,
       sortFn: numericSort,
       sortDescFirst: true,
       cell: ({ row }) => format(row.original[key]),
-      meta: { numeric: true, flag: key === "ctr" || key === "cpc" || key === "cpm" ? key : undefined },
+      meta: {
+        numeric: true,
+        flag: key === "ctr" || key === "cpc" || key === "cpm" ? key : undefined,
+      },
     });
     return [
       {
@@ -67,20 +89,17 @@ export function ChannelTable({ data }: { data: Metrics }) {
         cell: ({ row }) => (
           <span className="font-semibold text-foreground">
             {row.original.channelLabel}
-            {row.original.segment && <span className="font-normal text-body"> · {row.original.segment}</span>}
+            {row.original.segment && (
+              <span className="font-normal text-body">
+                {" "}
+                · {row.original.segment}
+              </span>
+            )}
           </span>
         ),
       },
       num("spend", "소진액", formatWon),
-      {
-        ...num("impressions", "노출", formatNumber),
-        cell: ({ row }) => (
-          <>
-            {formatNumber(row.original.impressions)}
-            {row.original.channel === "kakao-sms" && <span className="ml-1 text-st12 text-subtle">발송</span>}
-          </>
-        ),
-      },
+      num("impressions", "노출", formatNumber),
       num("clicks", "클릭", formatNumber),
       num("ctr", "CTR", (v) => formatPercent(v)),
       num("cpc", "CPC", formatWon),
@@ -90,7 +109,9 @@ export function ChannelTable({ data }: { data: Metrics }) {
         cell: ({ row }) => (
           <span title={row.original.conversionLabel}>
             {formatNumber(row.original.conversions)}
-            <span className="ml-1 text-st12 text-subtle">{row.original.conversionLabel}</span>
+            <span className="ml-1 text-st12 text-subtle">
+              {row.original.conversionLabel}
+            </span>
           </span>
         ),
       },
@@ -110,8 +131,11 @@ export function ChannelTable({ data }: { data: Metrics }) {
       description={
         <>
           머리글을 누르면 정렬돼요 ·{" "}
-          <span className="rounded-sm bg-warn-bg px-1 text-warn-fg">주황 칸</span> 은 같은 행의 직전 {BASELINE_WEEKS}주보다{" "}
-          {BASELINE_TOLERANCE * 100}% 이상 나쁜 값
+          <span className="rounded-sm bg-warn-bg px-1 text-warn-fg">
+            주황 칸
+          </span>{" "}
+          은 같은 행의 직전 {BASELINE_WEEKS}주보다 {BASELINE_TOLERANCE * 100}%
+          이상 나쁜 값
         </>
       }
     >
@@ -122,14 +146,23 @@ export function ChannelTable({ data }: { data: Metrics }) {
           <Table className="tabular text-t7">
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="border-border hover:bg-transparent">
+                <TableRow
+                  key={hg.id}
+                  className="border-border hover:bg-transparent"
+                >
                   {hg.headers.map((h, i) => {
                     const numeric = h.column.columnDef.meta?.numeric;
                     const sorted = h.column.getIsSorted();
                     return (
                       <TableHead
                         key={h.id}
-                        aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
+                        aria-sort={
+                          sorted === "asc"
+                            ? "ascending"
+                            : sorted === "desc"
+                              ? "descending"
+                              : "none"
+                        }
                         className={cn(
                           "h-10 px-3 text-st12 font-semibold text-subtle",
                           i === 0 && "pl-5 sm:pl-6",
@@ -163,10 +196,15 @@ export function ChannelTable({ data }: { data: Metrics }) {
             </TableHeader>
             <TableBody>
               {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="border-border hover:bg-surface/60">
+                <TableRow
+                  key={row.id}
+                  className="border-border hover:bg-surface/60"
+                >
                   {row.getAllCells().map((cell, i, cells) => {
                     const meta = cell.column.columnDef.meta;
-                    const worse = meta?.flag ? isWorse(row.original, meta.flag) : false;
+                    const worse = meta?.flag
+                      ? isWorse(row.original, meta.flag)
+                      : false;
                     return (
                       <TableCell
                         key={cell.id}
@@ -177,7 +215,11 @@ export function ChannelTable({ data }: { data: Metrics }) {
                           meta?.numeric && "text-right",
                           worse && "bg-warn-bg font-semibold text-warn-fg",
                         )}
-                        title={worse ? `직전 ${BASELINE_WEEKS}주보다 ${BASELINE_TOLERANCE * 100}% 이상 나쁨` : undefined}
+                        title={
+                          worse
+                            ? `직전 ${BASELINE_WEEKS}주보다 ${BASELINE_TOLERANCE * 100}% 이상 나쁨`
+                            : undefined
+                        }
                       >
                         <table.FlexRender cell={cell} />
                       </TableCell>

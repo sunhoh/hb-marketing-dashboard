@@ -2,10 +2,10 @@
  * DB → Dataset. API 의 일 단위 행은 주(월요일) 단위로 합친다.
  */
 import "server-only";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { desc, eq, gte } from "drizzle-orm";
 import type { Dataset } from "@/lib/build-metrics";
 import { mondayOf, weeksUntil } from "@/lib/periods";
-import type { ClientSlug, Creative, WeeklyMetric } from "@/lib/types";
+import type { Creative, WeeklyMetric } from "@/lib/types";
 import { db } from ".";
 import {
   adMetrics,
@@ -13,18 +13,13 @@ import {
   ga4Daily,
   gscDaily,
   gscQueryDaily,
-  placeRanks,
-  placeStats,
   snsStats,
   syncRuns,
-  viralPosts,
   youtubeVideos,
 } from "./schema";
 
 /** 기간 비교(최근 12주 vs 직전 12주, 지난달 vs 그 전달)에 충분한 주 수 */
 const WEEK_COUNT = 30;
-/** 플레이스 카드는 지금 GU일산만 */
-const PLACE_CLIENT: ClientSlug = "gu-ilsan";
 
 function seoulDate(d: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
@@ -102,85 +97,30 @@ export async function loadDbDataset(): Promise<{
   const weeks = weeksUntil(today, WEEK_COUNT);
   const from = weeks[0];
 
-  const [
-    ads,
-    creativeRows,
-    ranks,
-    stats,
-    posts,
-    sns,
-    videos,
-    ga4Rows,
-    gscRows,
-    queryRows,
-    lastRun,
-  ] = await Promise.all([
-    db.select().from(adMetrics).where(gte(adMetrics.date, from)),
-    db.select().from(creatives),
-    db
-      .select()
-      .from(placeRanks)
-      .where(
-        and(
-          gte(placeRanks.weekStart, from),
-          eq(placeRanks.client, PLACE_CLIENT),
+  const [ads, creativeRows, sns, videos, ga4Rows, gscRows, queryRows, lastRun] =
+    await Promise.all([
+      db.select().from(adMetrics).where(gte(adMetrics.date, from)),
+      db.select().from(creatives),
+      db.select().from(snsStats).where(gte(snsStats.weekStart, from)),
+      db
+        .select()
+        .from(youtubeVideos)
+        .where(
+          gte(youtubeVideos.publishedAt, new Date(`${from}T00:00:00+09:00`)),
         ),
-      )
-      .orderBy(placeRanks.id),
-    db
-      .select()
-      .from(placeStats)
-      .where(
-        and(
-          gte(placeStats.weekStart, from),
-          eq(placeStats.client, PLACE_CLIENT),
-        ),
-      ),
-    db.select().from(viralPosts).where(gte(viralPosts.publishedOn, from)),
-    db.select().from(snsStats).where(gte(snsStats.weekStart, from)),
-    db
-      .select()
-      .from(youtubeVideos)
-      .where(
-        gte(youtubeVideos.publishedAt, new Date(`${from}T00:00:00+09:00`)),
-      ),
-    db.select().from(ga4Daily).where(gte(ga4Daily.date, from)),
-    db.select().from(gscDaily).where(gte(gscDaily.date, from)),
-    db.select().from(gscQueryDaily).where(gte(gscQueryDaily.date, from)),
-    db
-      .select({ finishedAt: syncRuns.finishedAt })
-      .from(syncRuns)
-      .where(eq(syncRuns.status, "success"))
-      .orderBy(desc(syncRuns.finishedAt))
-      .limit(1),
-  ]);
+      db.select().from(ga4Daily).where(gte(ga4Daily.date, from)),
+      db.select().from(gscDaily).where(gte(gscDaily.date, from)),
+      db.select().from(gscQueryDaily).where(gte(gscQueryDaily.date, from)),
+      db
+        .select({ finishedAt: syncRuns.finishedAt })
+        .from(syncRuns)
+        .where(eq(syncRuns.status, "success"))
+        .orderBy(desc(syncRuns.finishedAt))
+        .limit(1),
+    ]);
 
   const channelRows = ads.filter((r) => r.creativeId === "");
   const creativeRowsOnly = ads.filter((r) => r.creativeId !== "");
-
-  // 바이럴: 발행일이 속한 주로 묶어 발행 수와 상위노출 키워드 수(중복 제외)를 센다
-  const viralMap = new Map<
-    string,
-    {
-      client: ClientSlug;
-      weekStart: string;
-      published: number;
-      keywords: Set<string>;
-    }
-  >();
-  for (const p of posts) {
-    const weekStart = mondayOf(p.publishedOn);
-    const key = `${weekStart}|${p.client}`;
-    const acc = viralMap.get(key) ?? {
-      client: p.client,
-      weekStart,
-      published: 0,
-      keywords: new Set<string>(),
-    };
-    acc.published += 1;
-    if (p.topExposed && p.keyword) acc.keywords.add(p.keyword);
-    viralMap.set(key, acc);
-  }
 
   const dataset: Dataset = {
     today,
@@ -196,22 +136,6 @@ export async function loadDbDataset(): Promise<{
         }) as Creative,
     ),
     creativeWeekly: toWeekly(creativeRowsOnly, (r) => r.creativeId),
-    placeKeywords: [...new Set(ranks.map((r) => r.keyword))], // 시트에 처음 적힌 순서 = 선 색 순서
-    placeRanks: ranks.flatMap((r) =>
-      r.rank === null
-        ? []
-        : [{ weekStart: r.weekStart, keyword: r.keyword, rank: r.rank }],
-    ),
-    placeStats: stats.map((s) => ({
-      weekStart: s.weekStart,
-      reviews: s.reviews,
-      rating: s.rating ?? 0,
-      saves: s.saves ?? 0,
-    })),
-    viral: [...viralMap.values()].map(({ keywords, ...v }) => ({
-      ...v,
-      topKeywords: keywords.size,
-    })),
     ga4: sumByWeek(ga4Rows, (r) => [r.client, r.sourceMedium], [
       "sessions",
       "newUsers",
