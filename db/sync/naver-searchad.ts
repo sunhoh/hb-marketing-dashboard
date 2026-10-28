@@ -35,7 +35,7 @@ const CHANNEL_BY_CAMPAIGN_TYPE: Record<string, string> = {
 const NAME_RULES: { match: RegExp; client: ClientSlug }[] = [
   { match: /일산/, client: "gu-ilsan" },
   { match: /강남/, client: "gu-gangnam" },
-  { match: /셀로라/, client: "cellora" },
+  // { match: /셀로라/, client: "cellora" },
 ];
 
 /**
