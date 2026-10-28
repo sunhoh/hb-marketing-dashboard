@@ -14,6 +14,7 @@ import { FilterBar } from "./filter-bar";
 import { OrganicSection } from "./organic-section";
 import { SummaryCards } from "./summary-cards";
 import { TrendChart } from "./trend-chart";
+import { WebSection } from "./web-section";
 
 async function fetchMetrics(client: ClientSlug, period: PeriodKey): Promise<Metrics> {
   const res = await fetch(`/api/metrics?${new URLSearchParams({ client, period })}`);
@@ -93,6 +94,7 @@ export function Dashboard({ client }: { client: ClientSlug }) {
           <SummaryCards data={data} isSms={client === "cellora"} />
           <TrendChart data={data} />
           <ChannelTable data={data} />
+          {data.web && <WebSection web={data.web} compareLabel={data.compareLabel} />}
           <CreativeRanking data={data} />
           <div className="mt-5">
             <OrganicSection data={data} />

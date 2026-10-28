@@ -77,6 +77,14 @@ export function formatWonShort(v: number) {
   return `₩${intFormat.format(Math.round(v))}`;
 }
 
+/** 좁은 칸용 수 표시: 12,345 → 1.2만, 248,912 → 24.9만 */
+export function formatCountShort(v: number | null) {
+  if (v === null) return EMPTY;
+  if (Math.abs(v) >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}억`;
+  if (Math.abs(v) >= 10_000) return `${(v / 10_000).toFixed(1)}만`;
+  return intFormat.format(Math.round(v));
+}
+
 /** 비용 지표(CPC·CPM)는 낮을수록 좋다 → 증감 색을 반대로 */
 export type MetricKey = "spend" | "impressions" | "clicks" | "conversions" | "ctr" | "cpc" | "cpm";
 export const LOWER_IS_BETTER: ReadonlySet<MetricKey> = new Set(["cpc", "cpm"]);

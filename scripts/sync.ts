@@ -8,6 +8,7 @@ import {
   isNaverSearchAdConfigured,
   syncNaverSearchAd,
 } from "../db/sync/naver-searchad";
+import { syncGoogle } from "../db/sync/google";
 import { syncSheet } from "../db/sync/sheet";
 import { isYoutubeConfigured, syncYoutube } from "../db/sync/youtube";
 import { CLIENTS, CHANNEL_LABELS } from "../lib/clients";
@@ -65,12 +66,30 @@ async function youtube() {
   }
 }
 
+async function google() {
+  // 처음 한 번은 npm run sync -- --google-days=400 으로 과거를 채운다
+  const daysArg = process.argv.find((a) => a.startsWith("--google-days="));
+  console.log("GA4 · 서치 콘솔 가져오는 중…");
+  const r = await syncGoogle(
+    daysArg ? Number(daysArg.split("=")[1]) : undefined,
+  );
+  for (const g of r.ga4 ?? [])
+    console.log(
+      `  GA4 ${name(g.client)}: ${r.since} ~ ${r.until}, 세션 ${formatNumber(g.sessions)}, 전환 ${formatNumber(g.conversions)}`,
+    );
+  for (const g of r.gsc?.report ?? [])
+    console.log(
+      `  서치 콘솔 ${name(g.client)}: ${r.gsc!.since} ~ ${r.until}, 클릭 ${formatNumber(g.clicks)}, 노출 ${formatNumber(g.impressions)}, 검색어 ${formatNumber(g.queries)}줄`,
+    );
+}
+
 async function main() {
   let failed = false;
   for (const [label, job] of [
     ["구글 시트", sheet],
     ["네이버 검색광고", naver],
     ["유튜브", youtube],
+    ["GA4 · 서치 콘솔", google],
   ] as const) {
     try {
       await job();

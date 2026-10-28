@@ -225,4 +225,7 @@ export const SAMPLE_DATASET: Dataset = {
   viral: VIRAL_STATS,
   sns: SNS_STATS,
   videos: [],
+  ga4: [],
+  gsc: [],
+  gscQueries: [],
 };

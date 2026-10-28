@@ -18,7 +18,7 @@ import {
 import type { ClientSlug } from "@/lib/types";
 
 /** 데이터가 어디서 왔는지 — 화면의 "연결 끊김" 경고와 디버깅에 쓴다 */
-export type Source = "meta_api" | "naver_api" | "instagram_api" | "youtube_api" | "sheet" | "sample";
+export type Source = "meta_api" | "naver_api" | "instagram_api" | "youtube_api" | "ga4_api" | "gsc_api" | "sheet" | "sample";
 
 const client = () => text("client").$type<ClientSlug>().notNull();
 const source = () => text("source").$type<Source>().notNull();
@@ -176,6 +176,52 @@ export const youtubeVideoSnapshots = pgTable(
     views: bigint("views", { mode: "number" }).notNull(),
   },
   (t) => [unique("youtube_video_snapshots_key").on(t.date, t.videoId)],
+);
+
+/** GA4 일별 유입. 전환 = 클라이언트별로 정한 이벤트(db/sync/google.ts CONVERSION_EVENTS)의 합 */
+export const ga4Daily = pgTable(
+  "ga4_daily",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    client: client(),
+    sourceMedium: text("source_medium").notNull(), // 예) "naver / brand"
+    sessions: integer("sessions").notNull(),
+    newUsers: integer("new_users").notNull(),
+    conversions: integer("conversions").notNull(),
+    syncedAt: syncedAt(),
+  },
+  (t) => [unique("ga4_daily_key").on(t.date, t.client, t.sourceMedium)],
+);
+
+/** 서치 콘솔 일별 합계. 평균 순위 = positionSum ÷ impressions (노출 가중 평균) */
+export const gscDaily = pgTable(
+  "gsc_daily",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    client: client(),
+    clicks: integer("clicks").notNull(),
+    impressions: integer("impressions").notNull(),
+    positionSum: numeric("position_sum", { mode: "number" }).notNull(),
+    syncedAt: syncedAt(),
+  },
+  (t) => [unique("gsc_daily_key").on(t.date, t.client)],
+);
+
+/** 서치 콘솔 일별 검색어(클릭이 있거나 노출이 많은 것만) */
+export const gscQueryDaily = pgTable(
+  "gsc_query_daily",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    client: client(),
+    query: text("query").notNull(),
+    clicks: integer("clicks").notNull(),
+    impressions: integer("impressions").notNull(),
+    positionSum: numeric("position_sum", { mode: "number" }).notNull(),
+  },
+  (t) => [unique("gsc_query_daily_key").on(t.date, t.client, t.query)],
 );
 
 /** 동기화 실행 기록. 마지막 성공이 오래되면 화면에 "연결 끊김"을 띄운다 */

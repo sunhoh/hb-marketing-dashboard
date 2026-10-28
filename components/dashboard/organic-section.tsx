@@ -3,7 +3,7 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PLATFORM_LABELS } from "@/lib/clients";
 import type { Metrics } from "@/lib/build-metrics";
-import { changeRate, EMPTY, formatNumber } from "@/lib/metrics";
+import { changeRate, EMPTY, formatCountShort, formatNumber } from "@/lib/metrics";
 import { shortDate } from "@/lib/periods";
 import { useThemeColors } from "@/lib/use-theme-colors";
 import { CountDelta, Delta, EmptyState, Section } from "./primitives";
@@ -229,9 +229,55 @@ function YoutubeCard({ youtube, compareLabel }: { youtube: NonNullable<Metrics["
   );
 }
 
+function SearchCard({ search, compareLabel }: { search: NonNullable<Metrics["organic"]["search"]>; compareLabel: string }) {
+  const { current, previous } = search;
+  return (
+    <Section title="구글 검색" description={`서치 콘솔 · ${compareLabel}`}>
+      <div className="grid grid-cols-3 gap-2">
+        <Stat
+          label="클릭"
+          value={formatNumber(current.clicks)}
+          delta={<Delta metric="clicks" rate={changeRate(current.clicks, previous.clicks)} />}
+        />
+        <Stat
+          label="노출"
+          value={formatCountShort(current.impressions)}
+          delta={<Delta metric="impressions" rate={changeRate(current.impressions, previous.impressions)} />}
+        />
+        <Stat
+          label="평균 순위"
+          value={current.position === null ? EMPTY : `${current.position.toFixed(1)}위`}
+          delta={
+            current.position !== null && previous.position !== null ? (
+              <CountDeltaDecimal value={previous.position - current.position} />
+            ) : (
+              <span className="text-muted-foreground">{EMPTY}</span>
+            )
+          }
+        />
+      </div>
+      <h3 className="mt-5 mb-1 text-t7 font-semibold text-body">검색어 TOP {search.queries.length} (클릭 순)</h3>
+      {search.queries.length === 0 ? (
+        <EmptyState>이 기간 검색어 데이터가 없어요</EmptyState>
+      ) : (
+        <ol className="divide-y divide-border">
+          {search.queries.map((q) => (
+            <li key={q.query} className="flex items-center justify-between gap-3 py-2 text-t7">
+              <span className="min-w-0 truncate text-body">{q.query}</span>
+              <span className="tabular shrink-0 text-subtle">
+                <b className="text-foreground">{formatNumber(q.clicks)}</b> 클릭 · {q.position === null ? EMPTY : `${q.position.toFixed(1)}위`}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Section>
+  );
+}
+
 export function OrganicSection({ data }: { data: Metrics }) {
-  const { place, viral, sns, youtube } = data.organic;
-  const empty = !place && !viral && sns.length === 0 && !youtube;
+  const { place, viral, sns, youtube, search } = data.organic;
+  const empty = !place && !viral && sns.length === 0 && !youtube && !search;
 
   return (
     <div className="min-w-0">
@@ -247,6 +293,7 @@ export function OrganicSection({ data }: { data: Metrics }) {
           {place && <PlaceCard place={place} compareLabel={data.compareLabel} />}
           {viral && <ViralCard viral={viral} />}
           {sns.length > 0 && <SnsCard sns={sns} />}
+          {search && <SearchCard search={search} compareLabel={data.compareLabel} />}
           {youtube && <YoutubeCard youtube={youtube} compareLabel={data.compareLabel} />}
         </div>
       )}

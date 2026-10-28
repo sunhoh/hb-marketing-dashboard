@@ -7,7 +7,19 @@ import type { Dataset } from "@/lib/build-metrics";
 import { mondayOf, weeksUntil } from "@/lib/periods";
 import type { ClientSlug, Creative, WeeklyMetric } from "@/lib/types";
 import { db } from ".";
-import { adMetrics, creatives, placeRanks, placeStats, snsStats, syncRuns, viralPosts, youtubeVideos } from "./schema";
+import {
+  adMetrics,
+  creatives,
+  ga4Daily,
+  gscDaily,
+  gscQueryDaily,
+  placeRanks,
+  placeStats,
+  snsStats,
+  syncRuns,
+  viralPosts,
+  youtubeVideos,
+} from "./schema";
 
 /** 기간 비교(최근 12주 vs 직전 12주, 지난달 vs 그 전달)에 충분한 주 수 */
 const WEEK_COUNT = 30;
@@ -19,12 +31,38 @@ function seoulDate(d: Date) {
 }
 
 function seoulToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(
+    new Date(),
+  );
 }
 
 type AdRow = typeof adMetrics.$inferSelect;
 
-function toWeekly(rows: AdRow[], keyOf: (r: AdRow) => string | undefined): WeeklyMetric[] {
+/** 일 단위 행을 (키 + 주) 로 묶어 숫자 칸을 더한다 */
+function sumByWeek<T extends { date: string }, K extends keyof T>(
+  rows: T[],
+  keyOf: (r: T) => unknown[],
+  fields: K[],
+) {
+  const map = new Map<string, T & { weekStart: string }>();
+  for (const r of rows) {
+    const weekStart = mondayOf(r.date);
+    const key = [weekStart, ...keyOf(r)].join("|");
+    const acc = map.get(key);
+    if (!acc) {
+      map.set(key, { ...r, weekStart });
+      continue;
+    }
+    for (const f of fields)
+      (acc[f] as number) = (acc[f] as number) + (r[f] as number);
+  }
+  return [...map.values()];
+}
+
+function toWeekly(
+  rows: AdRow[],
+  keyOf: (r: AdRow) => string | undefined,
+): WeeklyMetric[] {
   const map = new Map<string, WeeklyMetric & { hasConv: boolean }>();
   for (const r of rows) {
     const weekStart = r.granularity === "week" ? r.date : mondayOf(r.date);
@@ -50,26 +88,65 @@ function toWeekly(rows: AdRow[], keyOf: (r: AdRow) => string | undefined): Weekl
     }
     map.set(key, acc);
   }
-  return [...map.values()].map(({ hasConv, ...m }) => ({ ...m, conversions: hasConv ? m.conversions : undefined }));
+  return [...map.values()].map(({ hasConv, ...m }) => ({
+    ...m,
+    conversions: hasConv ? m.conversions : undefined,
+  }));
 }
 
-export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt: string | null }> {
+export async function loadDbDataset(): Promise<{
+  dataset: Dataset;
+  lastSyncedAt: string | null;
+}> {
   const today = seoulToday();
   const weeks = weeksUntil(today, WEEK_COUNT);
   const from = weeks[0];
 
-  const [ads, creativeRows, ranks, stats, posts, sns, videos, lastRun] = await Promise.all([
+  const [
+    ads,
+    creativeRows,
+    ranks,
+    stats,
+    posts,
+    sns,
+    videos,
+    ga4Rows,
+    gscRows,
+    queryRows,
+    lastRun,
+  ] = await Promise.all([
     db.select().from(adMetrics).where(gte(adMetrics.date, from)),
     db.select().from(creatives),
     db
       .select()
       .from(placeRanks)
-      .where(and(gte(placeRanks.weekStart, from), eq(placeRanks.client, PLACE_CLIENT)))
+      .where(
+        and(
+          gte(placeRanks.weekStart, from),
+          eq(placeRanks.client, PLACE_CLIENT),
+        ),
+      )
       .orderBy(placeRanks.id),
-    db.select().from(placeStats).where(and(gte(placeStats.weekStart, from), eq(placeStats.client, PLACE_CLIENT))),
+    db
+      .select()
+      .from(placeStats)
+      .where(
+        and(
+          gte(placeStats.weekStart, from),
+          eq(placeStats.client, PLACE_CLIENT),
+        ),
+      ),
     db.select().from(viralPosts).where(gte(viralPosts.publishedOn, from)),
     db.select().from(snsStats).where(gte(snsStats.weekStart, from)),
-    db.select().from(youtubeVideos).where(gte(youtubeVideos.publishedAt, new Date(`${from}T00:00:00+09:00`))),
+    db
+      .select()
+      .from(youtubeVideos)
+      .where(
+        gte(youtubeVideos.publishedAt, new Date(`${from}T00:00:00+09:00`)),
+      ),
+    db.select().from(ga4Daily).where(gte(ga4Daily.date, from)),
+    db.select().from(gscDaily).where(gte(gscDaily.date, from)),
+    db.select().from(gscQueryDaily).where(gte(gscQueryDaily.date, from)),
     db
       .select({ finishedAt: syncRuns.finishedAt })
       .from(syncRuns)
@@ -82,11 +159,24 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
   const creativeRowsOnly = ads.filter((r) => r.creativeId !== "");
 
   // 바이럴: 발행일이 속한 주로 묶어 발행 수와 상위노출 키워드 수(중복 제외)를 센다
-  const viralMap = new Map<string, { client: ClientSlug; weekStart: string; published: number; keywords: Set<string> }>();
+  const viralMap = new Map<
+    string,
+    {
+      client: ClientSlug;
+      weekStart: string;
+      published: number;
+      keywords: Set<string>;
+    }
+  >();
   for (const p of posts) {
     const weekStart = mondayOf(p.publishedOn);
     const key = `${weekStart}|${p.client}`;
-    const acc = viralMap.get(key) ?? { client: p.client, weekStart, published: 0, keywords: new Set<string>() };
+    const acc = viralMap.get(key) ?? {
+      client: p.client,
+      weekStart,
+      published: 0,
+      keywords: new Set<string>(),
+    };
     acc.published += 1;
     if (p.topExposed && p.keyword) acc.keywords.add(p.keyword);
     viralMap.set(key, acc);
@@ -98,13 +188,66 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
     weeks,
     weekly: toWeekly(channelRows, (r) => r.segment || undefined),
     creatives: creativeRows.map(
-      (c): Creative => ({ id: c.id, client: c.client, name: c.name, format: c.format ?? "—" }) as Creative,
+      (c): Creative =>
+        ({
+          id: c.id,
+          client: c.client,
+          name: c.name,
+          format: c.format ?? "—",
+        }) as Creative,
     ),
     creativeWeekly: toWeekly(creativeRowsOnly, (r) => r.creativeId),
     placeKeywords: [...new Set(ranks.map((r) => r.keyword))], // 시트에 처음 적힌 순서 = 선 색 순서
-    placeRanks: ranks.flatMap((r) => (r.rank === null ? [] : [{ weekStart: r.weekStart, keyword: r.keyword, rank: r.rank }])),
-    placeStats: stats.map((s) => ({ weekStart: s.weekStart, reviews: s.reviews, rating: s.rating ?? 0, saves: s.saves ?? 0 })),
-    viral: [...viralMap.values()].map(({ keywords, ...v }) => ({ ...v, topKeywords: keywords.size })),
+    placeRanks: ranks.flatMap((r) =>
+      r.rank === null
+        ? []
+        : [{ weekStart: r.weekStart, keyword: r.keyword, rank: r.rank }],
+    ),
+    placeStats: stats.map((s) => ({
+      weekStart: s.weekStart,
+      reviews: s.reviews,
+      rating: s.rating ?? 0,
+      saves: s.saves ?? 0,
+    })),
+    viral: [...viralMap.values()].map(({ keywords, ...v }) => ({
+      ...v,
+      topKeywords: keywords.size,
+    })),
+    ga4: sumByWeek(ga4Rows, (r) => [r.client, r.sourceMedium], [
+      "sessions",
+      "newUsers",
+      "conversions",
+    ]).map((r) => ({
+      client: r.client,
+      sourceMedium: r.sourceMedium,
+      weekStart: r.weekStart,
+      sessions: r.sessions,
+      newUsers: r.newUsers,
+      conversions: r.conversions,
+    })),
+    gsc: sumByWeek(gscRows, (r) => [r.client], [
+      "clicks",
+      "impressions",
+      "positionSum",
+    ]).map((r) => ({
+      client: r.client,
+      weekStart: r.weekStart,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      positionSum: r.positionSum,
+    })),
+    gscQueries: sumByWeek(queryRows, (r) => [r.client, r.query], [
+      "clicks",
+      "impressions",
+      "positionSum",
+    ]).map((r) => ({
+      client: r.client,
+      query: r.query,
+      weekStart: r.weekStart,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      positionSum: r.positionSum,
+    })),
     videos: videos.map((v) => ({
       client: v.client,
       id: v.videoId,
@@ -115,8 +258,17 @@ export async function loadDbDataset(): Promise<{ dataset: Dataset; lastSyncedAt:
       comments: v.comments,
       isShort: v.isShort === 1,
     })),
-    sns: sns.map((s) => ({ client: s.client, platform: s.platform, weekStart: s.weekStart, followers: s.followers, views: s.views })),
+    sns: sns.map((s) => ({
+      client: s.client,
+      platform: s.platform,
+      weekStart: s.weekStart,
+      followers: s.followers,
+      views: s.views,
+    })),
   };
 
-  return { dataset, lastSyncedAt: lastRun[0]?.finishedAt?.toISOString() ?? null };
+  return {
+    dataset,
+    lastSyncedAt: lastRun[0]?.finishedAt?.toISOString() ?? null,
+  };
 }

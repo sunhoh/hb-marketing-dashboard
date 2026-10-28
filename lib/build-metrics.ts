@@ -4,6 +4,7 @@
 import { CHANNEL_LABELS, CLIENTS, CONVERSION_LABELS } from "./clients";
 import { cpc, ctr, deriveAll, sumTotals, type DerivedTotals } from "./metrics";
 import { addDays, mondayOf, PERIODS, resolvePeriod } from "./periods";
+import { CONVERSION_EVENTS, sourceLabel } from "./web-config";
 import type {
   ClientSlug,
   Creative,
@@ -30,12 +31,18 @@ export type Dataset = {
   viral: ViralStat[];
   sns: SnsStat[];
   videos: VideoStat[];
+  ga4: { client: ClientSlug; weekStart: string; sourceMedium: string; sessions: number; newUsers: number; conversions: number }[];
+  gsc: { client: ClientSlug; weekStart: string; clicks: number; impressions: number; positionSum: number }[];
+  gscQueries: { client: ClientSlug; weekStart: string; query: string; clicks: number; impressions: number; positionSum: number }[];
 };
 
 /** 채널 표에서 '평소보다 나쁨'으로 칠하는 문턱 (기준 = 같은 채널·세부의 직전 12주) */
 export const BASELINE_TOLERANCE = 0.2;
 export const BASELINE_WEEKS = 12;
 export const YOUTUBE_TOP = 5;
+/** 홈페이지 유입 표에 따로 보여 줄 유입 경로 수(나머지는 '기타') */
+export const WEB_SOURCE_ROWS = 8;
+export const SEARCH_QUERY_TOP = 10;
 /** 소재 OFF 후보 문턱 (기준 = 같은 클라이언트 메타 소재 전체 값) */
 export const OFF_CTR_RATIO = 0.7;
 export const OFF_CPC_RATIO = 1.3;
@@ -238,6 +245,82 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
       }
     : null;
 
+  // 홈페이지 유입(GA4) — 같은 화면 이름(sourceLabel)끼리 합친다
+  const ga4Rows = byClient(ds.ga4, client);
+  const sumWeb = (rows: typeof ga4Rows) =>
+    rows.reduce((a, r) => ({ sessions: a.sessions + r.sessions, conversions: a.conversions + r.conversions }), {
+      sessions: 0,
+      conversions: 0,
+    });
+  const webRate = (t: { sessions: number; conversions: number }) => (t.sessions ? (t.conversions / t.sessions) * 100 : null);
+  const webCurrent = inWeeks(ga4Rows, weeks.current);
+  const webPrevious = inWeeks(ga4Rows, weeks.previous);
+  const bySource = [...groupBy(webCurrent, (r) => sourceLabel(r.sourceMedium))]
+    .map(([label, rows]) => {
+      const t = sumWeb(rows);
+      const prev = sumWeb(webPrevious.filter((r) => sourceLabel(r.sourceMedium) === label));
+      return {
+        label,
+        raw: [...new Set(rows.map((r) => r.sourceMedium))],
+        ...t,
+        rate: webRate(t),
+        previousSessions: prev.sessions,
+      };
+    })
+    .sort((a, b) => b.sessions - a.sessions);
+  const webTotal = sumWeb(webCurrent);
+  const webPrevTotal = sumWeb(webPrevious);
+  const restSources = bySource.slice(WEB_SOURCE_ROWS);
+  const web = ga4Rows.length
+    ? {
+        conversionEvents: CONVERSION_EVENTS[client],
+        current: { ...webTotal, rate: webRate(webTotal) },
+        previous: { ...webPrevTotal, rate: webRate(webPrevTotal) },
+        sources: [
+          ...bySource.slice(0, WEB_SOURCE_ROWS),
+          ...(restSources.length
+            ? [
+                (() => {
+                  const t = { sessions: 0, conversions: 0, previousSessions: 0 };
+                  for (const r of restSources) {
+                    t.sessions += r.sessions;
+                    t.conversions += r.conversions;
+                    t.previousSessions += r.previousSessions;
+                  }
+                  return { label: `기타 ${restSources.length}개`, raw: restSources.map((r) => r.label), ...t, rate: webRate(t) };
+                })(),
+              ]
+            : []),
+        ].map((r) => ({ ...r, share: webTotal.sessions ? (r.sessions / webTotal.sessions) * 100 : null })),
+      }
+    : null;
+
+  // 구글 검색(서치 콘솔)
+  const gscRows = byClient(ds.gsc, client);
+  const sumSearch = (rows: { clicks: number; impressions: number; positionSum: number }[]) => {
+    const t = rows.reduce(
+      (a, r) => ({ clicks: a.clicks + r.clicks, impressions: a.impressions + r.impressions, positionSum: a.positionSum + r.positionSum }),
+      { clicks: 0, impressions: 0, positionSum: 0 },
+    );
+    return {
+      clicks: t.clicks,
+      impressions: t.impressions,
+      ctr: t.impressions ? (t.clicks / t.impressions) * 100 : null,
+      position: t.impressions ? t.positionSum / t.impressions : null,
+    };
+  };
+  const queryCurrent = inWeeks(byClient(ds.gscQueries, client), weeks.current);
+  const search = gscRows.length
+    ? {
+        current: sumSearch(inWeeks(gscRows, weeks.current)),
+        previous: sumSearch(inWeeks(gscRows, weeks.previous)),
+        queries: [...groupBy(queryCurrent, (r) => r.query)]
+          .map(([query, rows]) => ({ query, ...sumSearch(rows) }))
+          .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
+          .slice(0, SEARCH_QUERY_TOP),
+      }
+    : null;
+
   return {
     client,
     period,
@@ -251,6 +334,7 @@ export function buildMetrics(ds: Dataset, client: ClientSlug, period: PeriodKey)
     weekly,
     channels,
     creatives,
-    organic: { place, viral, sns, youtube },
+    web,
+    organic: { place, viral, sns, youtube, search },
   };
 }
