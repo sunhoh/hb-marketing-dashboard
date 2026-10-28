@@ -201,7 +201,7 @@ function seoulToday() {
 }
 
 /** 스냅숏 → 주 단위 sns_stats (주마다 마지막 스냅숏) */
-async function rebuildWeekly(client: ClientSlug) {
+async function rebuildWeekly(client: ClientSlug, account: string) {
   const snaps = await db
     .select()
     .from(snsSnapshots)
@@ -209,6 +209,7 @@ async function rebuildWeekly(client: ClientSlug) {
       and(
         eq(snsSnapshots.client, client),
         eq(snsSnapshots.platform, "youtube"),
+        eq(snsSnapshots.account, account),
       ),
     )
     .orderBy(asc(snsSnapshots.date));
@@ -219,6 +220,7 @@ async function rebuildWeekly(client: ClientSlug) {
     weekStart,
     client,
     platform: "youtube" as const,
+    account,
     followers: s.followers,
     views:
       i > 0 ? Math.max(0, s.totalViews - weeks[i - 1][1].totalViews) : null,
@@ -287,6 +289,7 @@ export async function syncYoutube() {
           date: today,
           client,
           platform: "youtube",
+          account: channel, // 채널 링크용 @핸들(또는 UC… ID)
           followers,
           totalViews,
           source: "youtube_api",
@@ -296,10 +299,11 @@ export async function syncYoutube() {
             snsSnapshots.date,
             snsSnapshots.client,
             snsSnapshots.platform,
+            snsSnapshots.account,
           ],
           set: { followers, totalViews, syncedAt: sql`now()` },
         });
-      await rebuildWeekly(client);
+      await rebuildWeekly(client, channel);
       const uploads = item.contentDetails?.relatedPlaylists?.uploads;
       const videos = uploads
         ? await syncVideos(client, item.id, uploads, cfg.apiKey, today)

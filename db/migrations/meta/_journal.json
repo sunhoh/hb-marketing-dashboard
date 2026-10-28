@@ -29,6 +29,20 @@
       "when": 1793155157719,
       "tag": "0003_ga4_gsc",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793164427320,
+      "tag": "0004_ad_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793167255799,
+      "tag": "0005_sns_account",
+      "breakpoints": true
     }
   ]
 }

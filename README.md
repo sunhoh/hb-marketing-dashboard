@@ -14,16 +14,14 @@ npm run db:stop    # 로컬 Postgres 끄기
 
 | 명령 | 하는 일 |
 |---|---|
-| `npm run sync` | 구글 시트 "마케팅 대시보드" → DB |
+| `npm run sync` | 구글 시트 + 네이버 검색광고 + 메타 광고·인스타그램 + 유튜브 + GA4·서치 콘솔 → DB |
 | `npm run db:migrate` | 스키마(`db/schema.ts`) 변경을 DB에 적용 (`db:generate` 로 마이그레이션 생성 후) |
-| `npm run db:sample` | 샘플 데이터를 DB에 넣기 (`-- --clear` 로 지우기). DB 경로 확인용 |
 | `npm run sheet:template` | 시트 입력 양식(xlsx) 다시 만들기 |
 
 `.env.local` (git 제외)
 
 | 키 | 값 |
 |---|---|
-| `DATA_SOURCE` | `db` = DB를 읽음, `sample` = 샘플 화면 |
 | `DATABASE_URL` | 로컬은 `postgres://dashboard@localhost:5433/marketing`, 배포 시 Supabase 주소 |
 | `GOOGLE_SHEET_ID` | 입력 시트 ID |
 

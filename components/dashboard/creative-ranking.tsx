@@ -64,7 +64,7 @@ export function CreativeRanking({ data }: { data: Metrics }) {
   return (
     <Section
       title="메타 소재별 성과"
-      description={`CTR이 소재 평균의 ${OFF_CTR_RATIO * 100}% 미만이거나 CPC가 ${OFF_CPC_RATIO * 100}% 초과면 OFF 후보`}
+      description={`노출 1,000회 이상 소재만 · CTR이 소재 평균의 ${OFF_CTR_RATIO * 100}% 미만이거나 CPC가 ${OFF_CPC_RATIO * 100}% 초과면 OFF 후보`}
       action={
         rows.length > 0 && (
           <Tabs value={rankBy} onValueChange={(v) => setRankBy(v as RankBy)}>
@@ -90,7 +90,11 @@ export function CreativeRanking({ data }: { data: Metrics }) {
             : "선택한 기간에 소재 데이터가 없어요"}
         </EmptyState>
       ) : (
-        <ol className="divide-y divide-border">
+        // 정렬 기준을 바꾸면 key로 다시 마운트돼 스크롤이 맨 위로 돌아감
+        <ol
+          key={rankBy}
+          className="-mr-2 max-h-[32rem] divide-y divide-border overflow-y-auto overscroll-contain pr-2 [scrollbar-color:transparent_transparent] [scrollbar-width:thin] hover:[scrollbar-color:var(--subtle)_transparent]"
+        >
           {rows.map((row) => (
             <CreativeItem key={row.id} row={row} rankBy={rankBy} />
           ))}

@@ -18,11 +18,19 @@ import {
 import type { ClientSlug } from "@/lib/types";
 
 /** 데이터가 어디서 왔는지 — 화면의 "연결 끊김" 경고와 디버깅에 쓴다 */
-export type Source = "meta_api" | "naver_api" | "instagram_api" | "youtube_api" | "ga4_api" | "gsc_api" | "sheet" | "sample";
+export type Source =
+  | "meta_api"
+  | "naver_api"
+  | "instagram_api"
+  | "youtube_api"
+  | "ga4_api"
+  | "gsc_api"
+  | "sheet";
 
 const client = () => text("client").$type<ClientSlug>().notNull();
 const source = () => text("source").$type<Source>().notNull();
-const syncedAt = () => timestamp("synced_at", { withTimezone: true }).notNull().defaultNow();
+const syncedAt = () =>
+  timestamp("synced_at", { withTimezone: true }).notNull().defaultNow();
 
 /** 매체 성과. API 는 일 단위(day), 시트 수기 입력은 주 단위(week, 월요일 날짜) */
 export const adMetrics = pgTable(
@@ -35,6 +43,7 @@ export const adMetrics = pgTable(
     channel: text("channel").notNull(), // meta, gangnam-unni, creatrip, naver-place, danggeun, kakao-sms
     segment: text("segment").notNull().default(""), // 국가 / 국가 등급. 없으면 ""
     creativeId: text("creative_id").notNull().default(""), // 소재 단위 행만 채움
+    account: text("account").notNull().default(""), // 매체 광고 계정 ID(메타 act_…). 같은 국가가 여러 계정에서 올 수 있어서 키에 넣는다
     spend: bigint("spend", { mode: "number" }).notNull(), // 원
     impressions: integer("impressions").notNull(), // 카톡·문자는 발송 수
     clicks: integer("clicks").notNull(),
@@ -44,7 +53,15 @@ export const adMetrics = pgTable(
     syncedAt: syncedAt(),
   },
   (t) => [
-    unique("ad_metrics_key").on(t.date, t.granularity, t.client, t.channel, t.segment, t.creativeId),
+    unique("ad_metrics_key").on(
+      t.date,
+      t.granularity,
+      t.client,
+      t.channel,
+      t.segment,
+      t.creativeId,
+      t.account,
+    ),
     check("ad_metrics_granularity", sql`${t.granularity} in ('day', 'week')`),
   ],
 );
@@ -110,20 +127,29 @@ export const viralPosts = pgTable(
   (t) => [unique("viral_posts_url").on(t.url)],
 );
 
-/** SNS 팔로워(주 마지막 날 기준)와 그 주 조회수 */
+/**
+ * SNS 팔로워(주 마지막 날 기준)와 그 주 조회수.
+ * 한 클라이언트가 같은 플랫폼 계정을 여럿 가질 수 있어서(@gu_clinic, @gu_clinic_tw) account 를 키에 넣는다.
+ * 인스타그램은 과거 팔로워 수를 주지 않아서, 스냅숏을 쌓기 전 주는 followers 가 null 이다.
+ */
 export const snsStats = pgTable(
   "sns_stats",
   {
     id: serial("id").primaryKey(),
     weekStart: date("week_start").notNull(),
     client: client(),
-    platform: text("platform").$type<"instagram" | "youtube" | "tiktok">().notNull(),
-    followers: integer("followers").notNull(),
+    platform: text("platform")
+      .$type<"instagram" | "youtube" | "tiktok">()
+      .notNull(),
+    account: text("account").notNull().default(""), // @핸들. 시트 입력·유튜브는 ""
+    followers: integer("followers"),
     views: integer("views"),
     source: source(),
     syncedAt: syncedAt(),
   },
-  (t) => [unique("sns_stats_key").on(t.weekStart, t.client, t.platform)],
+  (t) => [
+    unique("sns_stats_key").on(t.weekStart, t.client, t.platform, t.account),
+  ],
 );
 
 /**
@@ -136,13 +162,18 @@ export const snsSnapshots = pgTable(
     id: serial("id").primaryKey(),
     date: date("date").notNull(),
     client: client(),
-    platform: text("platform").$type<"instagram" | "youtube" | "tiktok">().notNull(),
+    platform: text("platform")
+      .$type<"instagram" | "youtube" | "tiktok">()
+      .notNull(),
+    account: text("account").notNull().default(""),
     followers: integer("followers").notNull(),
     totalViews: bigint("total_views", { mode: "number" }).notNull(),
     source: source(),
     syncedAt: syncedAt(),
   },
-  (t) => [unique("sns_snapshots_key").on(t.date, t.client, t.platform)],
+  (t) => [
+    unique("sns_snapshots_key").on(t.date, t.client, t.platform, t.account),
+  ],
 );
 
 /** 유튜브 영상(공개 정보). 조회수·좋아요·댓글은 동기화 때의 누적값 */
@@ -228,9 +259,14 @@ export const gscQueryDaily = pgTable(
 export const syncRuns = pgTable("sync_runs", {
   id: serial("id").primaryKey(),
   source: source(),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
-  status: text("status").$type<"running" | "success" | "error">().notNull().default("running"),
+  status: text("status")
+    .$type<"running" | "success" | "error">()
+    .notNull()
+    .default("running"),
   rowsUpserted: integer("rows_upserted").notNull().default(0),
   error: text("error"),
 });

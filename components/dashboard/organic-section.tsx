@@ -1,34 +1,84 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { PLATFORM_LABELS } from "@/lib/clients";
+import type { SnsStat } from "@/lib/types";
+
+type SnsPlatform = SnsStat["platform"];
 import type { Metrics } from "@/lib/build-metrics";
-import { changeRate, EMPTY, formatCountShort, formatNumber } from "@/lib/metrics";
+import {
+  changeRate,
+  EMPTY,
+  formatCountShort,
+  formatNumber,
+} from "@/lib/metrics";
 import { shortDate } from "@/lib/periods";
 import { useThemeColors } from "@/lib/use-theme-colors";
-import { CountDelta, Delta, directionClass, EmptyState, Section } from "./primitives";
+import {
+  CountDelta,
+  Delta,
+  directionClass,
+  EmptyState,
+  Section,
+} from "./primitives";
 
-function Stat({ label, value, delta }: { label: string; value: string; delta: React.ReactNode }) {
+function Stat({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta: React.ReactNode;
+}) {
   return (
     <div className="min-w-0 rounded-xl bg-surface px-3.5 py-3">
       <p className="text-st12 text-subtle">{label}</p>
-      <p className="tabular mt-0.5 truncate text-t4 font-bold text-foreground">{value}</p>
+      <p className="tabular mt-0.5 truncate text-t4 font-bold text-foreground">
+        {value}
+      </p>
       <p className="mt-0.5 text-st12">{delta}</p>
     </div>
   );
 }
 
-function PlaceCard({ place, compareLabel }: { place: NonNullable<Metrics["organic"]["place"]>; compareLabel: string }) {
+function PlaceCard({
+  place,
+  compareLabel,
+}: {
+  place: NonNullable<Metrics["organic"]["place"]>;
+  compareLabel: string;
+}) {
   const c = useThemeColors();
-  const lineColors = [c["--chart-spend"], c["--chart-ctr"], c["--chart-cpc"], c["--chart-4"]];
+  const lineColors = [
+    c["--chart-spend"],
+    c["--chart-ctr"],
+    c["--chart-cpc"],
+    c["--chart-4"],
+  ];
   const prev = place.previous;
   return (
-    <Section title="네이버 플레이스" description={`GU일산 · 기간 마지막 주 기준, ${compareLabel}`}>
+    <Section
+      title="네이버 플레이스"
+      description={`GU일산 · 기간 마지막 주 기준, ${compareLabel}`}
+    >
       <div className="grid grid-cols-3 gap-2">
         <Stat
           label="리뷰 수"
           value={formatNumber(place.current.reviews)}
-          delta={<CountDelta value={prev ? place.current.reviews - prev.reviews : null} />}
+          delta={
+            <CountDelta
+              value={prev ? place.current.reviews - prev.reviews : null}
+            />
+          }
         />
         <Stat
           label="평점"
@@ -44,14 +94,23 @@ function PlaceCard({ place, compareLabel }: { place: NonNullable<Metrics["organi
         <Stat
           label="저장 수"
           value={formatNumber(place.current.saves)}
-          delta={<CountDelta value={prev ? place.current.saves - prev.saves : null} />}
+          delta={
+            <CountDelta
+              value={prev ? place.current.saves - prev.saves : null}
+            />
+          }
         />
       </div>
 
-      <h3 className="mt-5 mb-2 text-t7 font-semibold text-body">키워드 순위 (최근 12주, 위로 갈수록 상위)</h3>
+      <h3 className="mt-5 mb-2 text-t7 font-semibold text-body">
+        키워드 순위 (최근 12주, 위로 갈수록 상위)
+      </h3>
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={place.rankTrend} margin={{ top: 6, right: 6, bottom: 0, left: -18 }}>
+          <LineChart
+            data={place.rankTrend}
+            margin={{ top: 6, right: 6, bottom: 0, left: -18 }}
+          >
             <CartesianGrid vertical={false} stroke={c["--chart-grid"]} />
             <XAxis
               dataKey="weekStart"
@@ -99,16 +158,28 @@ function PlaceCard({ place, compareLabel }: { place: NonNullable<Metrics["organi
       </div>
       <ul className="mt-3 grid grid-cols-1 gap-1.5 text-t7 sm:grid-cols-2">
         {place.keywords.map((k, i) => (
-          <li key={k.keyword} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
+          <li
+            key={k.keyword}
+            className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2"
+          >
             <span className="flex min-w-0 items-center gap-2">
-              <span className="size-2 shrink-0 rounded-full" style={{ background: lineColors[i % lineColors.length] }} />
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: lineColors[i % lineColors.length] }}
+              />
               <span className="truncate text-body">{k.keyword}</span>
             </span>
             <span className="tabular flex shrink-0 items-center gap-1.5">
-              <span className="font-bold text-foreground">{k.rank ?? EMPTY}위</span>
+              <span className="font-bold text-foreground">
+                {k.rank ?? EMPTY}위
+              </span>
               <CountDelta
                 className="text-st12"
-                value={k.rank !== null && k.previousRank !== null ? k.previousRank - k.rank : null}
+                value={
+                  k.rank !== null && k.previousRank !== null
+                    ? k.previousRank - k.rank
+                    : null
+                }
               />
             </span>
           </li>
@@ -120,7 +191,10 @@ function PlaceCard({ place, compareLabel }: { place: NonNullable<Metrics["organi
 
 function CountDeltaDecimal({ value }: { value: number }) {
   const rounded = Math.round(value * 100) / 100;
-  if (rounded === 0) return <span className="font-semibold text-muted-foreground">변동 없음</span>;
+  if (rounded === 0)
+    return (
+      <span className="font-semibold text-muted-foreground">변동 없음</span>
+    );
   return (
     <span className={`font-semibold ${directionClass(rounded)}`}>
       {rounded > 0 ? "▲" : "▼"} {Math.abs(rounded).toFixed(2)}
@@ -128,23 +202,54 @@ function CountDeltaDecimal({ value }: { value: number }) {
   );
 }
 
-function ViralCard({ viral }: { viral: NonNullable<Metrics["organic"]["viral"]> }) {
+function ViralCard({
+  viral,
+}: {
+  viral: NonNullable<Metrics["organic"]["viral"]>;
+}) {
   return (
     <Section title="바이럴" description="블로그·카페 발행과 상위노출 키워드">
       <div className="grid grid-cols-2 gap-2">
         <Stat
           label="발행 수"
           value={`${formatNumber(viral.current.published)}건`}
-          delta={<Delta rate={changeRate(viral.current.published, viral.previous.published)} />}
+          delta={
+            <Delta
+              rate={changeRate(
+                viral.current.published,
+                viral.previous.published,
+              )}
+            />
+          }
         />
         <Stat
           label="상위노출 키워드"
           value={`${formatNumber(viral.current.topKeywords)}개`}
-          delta={<Delta rate={changeRate(viral.current.topKeywords, viral.previous.topKeywords)} />}
+          delta={
+            <Delta
+              rate={changeRate(
+                viral.current.topKeywords,
+                viral.previous.topKeywords,
+              )}
+            />
+          }
         />
       </div>
     </Section>
   );
+}
+
+/** 계정 핸들 → 프로필 주소. 핸들을 모르면(시트 입력) 플랫폼 첫 화면 */
+function profileUrl(platform: SnsPlatform, account: string | null) {
+  const handle = account?.replace(/^@/, "");
+  if (platform === "instagram")
+    return `https://www.instagram.com/${handle ?? ""}`;
+  if (platform === "tiktok")
+    return `https://www.tiktok.com/${handle ? `@${handle}` : ""}`;
+  if (!handle) return "https://www.youtube.com";
+  return handle.startsWith("UC") && !account!.startsWith("@")
+    ? `https://www.youtube.com/channel/${handle}`
+    : `https://www.youtube.com/@${handle}`;
 }
 
 function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
@@ -152,16 +257,41 @@ function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
     <Section title="SNS" description="기간 말 팔로워·구독자와 기간 내 조회수">
       <ul className="divide-y divide-border">
         {sns.map((s) => (
-          <li key={`${s.client}-${s.platform}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3">
-            <div className="min-w-0">
-              <p className="text-t6 font-semibold text-foreground">{PLATFORM_LABELS[s.platform]}</p>
-            </div>
-            <dl className="tabular grid grid-cols-2 gap-x-5 text-right text-t7">
+          <li
+            key={`${s.client}-${s.platform}-${s.account ?? ""}`}
+            className="flex items-center justify-between gap-x-3 py-3"
+          >
+            <a
+              href={profileUrl(s.platform, s.account)}
+              target="_blank"
+              rel="noreferrer"
+              className="group min-w-0 flex-1"
+            >
+              <p className="truncate text-t6 font-semibold text-foreground group-hover:underline">
+                {PLATFORM_LABELS[s.platform]}
+              </p>
+              {s.account && (
+                <p className="truncate text-st12 text-subtle" title={s.account}>
+                  {s.account}
+                </p>
+              )}
+            </a>
+            <dl className="tabular grid shrink-0 grid-cols-2 gap-x-5 whitespace-nowrap text-right text-t7">
               <div>
-                <dt className="text-st12 text-subtle">{s.platform === "youtube" ? "구독자" : "팔로워"}</dt>
+                <dt className="text-st12 text-subtle">
+                  {s.platform === "youtube" ? "구독자" : "팔로워"}
+                </dt>
                 <dd className="font-semibold text-foreground">
                   {formatNumber(s.followers)}
-                  {s.followerChange !== null && <> <CountDelta className="text-st12" value={s.followerChange} /></>}
+                  {s.followerChange !== null && (
+                    <>
+                      {" "}
+                      <CountDelta
+                        className="text-st12"
+                        value={s.followerChange}
+                      />
+                    </>
+                  )}
                 </dd>
               </div>
               <div>
@@ -171,7 +301,10 @@ function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
                   {s.views !== null && s.previousViews !== null && (
                     <>
                       {" "}
-                      <Delta className="text-st12" rate={changeRate(s.views, s.previousViews)} />
+                      <Delta
+                        className="text-st12"
+                        rate={changeRate(s.views, s.previousViews)}
+                      />
                     </>
                   )}
                 </dd>
@@ -184,16 +317,34 @@ function SnsCard({ sns }: { sns: Metrics["organic"]["sns"] }) {
   );
 }
 
-function YoutubeCard({ youtube, compareLabel }: { youtube: NonNullable<Metrics["organic"]["youtube"]>; compareLabel: string }) {
+function YoutubeCard({
+  youtube,
+  compareLabel,
+}: {
+  youtube: NonNullable<Metrics["organic"]["youtube"]>;
+  compareLabel: string;
+}) {
   return (
-    <Section title="유튜브 영상" description={`기간 내 업로드 · ${compareLabel} · 누적 조회수 순`}>
+    <Section
+      title="유튜브 영상"
+      description={`기간 내 업로드 · ${compareLabel} · 누적 조회수 순`}
+    >
       <div className="grid grid-cols-2 gap-2">
         <Stat
           label="업로드"
           value={`${formatNumber(youtube.uploads)}개`}
-          delta={<CountDelta value={youtube.uploads - youtube.previousUploads} unit="개" />}
+          delta={
+            <CountDelta
+              value={youtube.uploads - youtube.previousUploads}
+              unit="개"
+            />
+          }
         />
-        <Stat label="그중 쇼츠" value={`${formatNumber(youtube.shorts)}개`} delta={<span className="text-subtle">3분 이하 영상</span>} />
+        <Stat
+          label="그중 쇼츠"
+          value={`${formatNumber(youtube.shorts)}개`}
+          delta={<span className="text-subtle">3분 이하 영상</span>}
+        />
       </div>
       {youtube.top.length === 0 ? (
         <div className="mt-3">
@@ -203,7 +354,9 @@ function YoutubeCard({ youtube, compareLabel }: { youtube: NonNullable<Metrics["
         <ol className="mt-3 divide-y divide-border">
           {youtube.top.map((v, i) => (
             <li key={v.id} className="flex items-start gap-3 py-2.5">
-              <span className="tabular w-4 shrink-0 pt-0.5 text-t7 font-bold text-subtle">{i + 1}</span>
+              <span className="tabular w-4 shrink-0 pt-0.5 text-t7 font-bold text-subtle">
+                {i + 1}
+              </span>
               <div className="min-w-0 flex-1">
                 <a
                   href={`https://youtu.be/${v.id}`}
@@ -220,7 +373,9 @@ function YoutubeCard({ youtube, compareLabel }: { youtube: NonNullable<Metrics["
                   {v.comments !== null && ` · 댓글 ${formatNumber(v.comments)}`}
                 </p>
               </div>
-              <span className="tabular shrink-0 pt-0.5 text-t7 font-bold text-foreground">{formatNumber(v.views)}</span>
+              <span className="tabular shrink-0 pt-0.5 text-t7 font-bold text-foreground">
+                {formatNumber(v.views)}
+              </span>
             </li>
           ))}
         </ol>
@@ -229,7 +384,13 @@ function YoutubeCard({ youtube, compareLabel }: { youtube: NonNullable<Metrics["
   );
 }
 
-function SearchCard({ search, compareLabel }: { search: NonNullable<Metrics["organic"]["search"]>; compareLabel: string }) {
+function SearchCard({
+  search,
+  compareLabel,
+}: {
+  search: NonNullable<Metrics["organic"]["search"]>;
+  compareLabel: string;
+}) {
   const { current, previous } = search;
   return (
     <Section title="구글 검색" description={`서치 콘솔 · ${compareLabel}`}>
@@ -242,11 +403,19 @@ function SearchCard({ search, compareLabel }: { search: NonNullable<Metrics["org
         <Stat
           label="노출"
           value={formatCountShort(current.impressions)}
-          delta={<Delta rate={changeRate(current.impressions, previous.impressions)} />}
+          delta={
+            <Delta
+              rate={changeRate(current.impressions, previous.impressions)}
+            />
+          }
         />
         <Stat
           label="평균 순위"
-          value={current.position === null ? EMPTY : `${current.position.toFixed(1)}위`}
+          value={
+            current.position === null
+              ? EMPTY
+              : `${current.position.toFixed(1)}위`
+          }
           delta={
             current.position !== null && previous.position !== null ? (
               <CountDeltaDecimal value={previous.position - current.position} />
@@ -256,16 +425,22 @@ function SearchCard({ search, compareLabel }: { search: NonNullable<Metrics["org
           }
         />
       </div>
-      <h3 className="mt-5 mb-1 text-t7 font-semibold text-body">검색어 TOP {search.queries.length} (클릭 순)</h3>
+      <h3 className="mt-5 mb-1 text-t7 font-semibold text-body">
+        검색어 TOP {search.queries.length} (클릭 순)
+      </h3>
       {search.queries.length === 0 ? (
         <EmptyState>이 기간 검색어 데이터가 없어요</EmptyState>
       ) : (
         <ol className="divide-y divide-border">
           {search.queries.map((q) => (
-            <li key={q.query} className="flex items-center justify-between gap-3 py-2 text-t7">
+            <li
+              key={q.query}
+              className="flex items-center justify-between gap-3 py-2 text-t7"
+            >
               <span className="min-w-0 truncate text-body">{q.query}</span>
               <span className="tabular shrink-0 text-subtle">
-                <b className="text-foreground">{formatNumber(q.clicks)}</b> 클릭 · {q.position === null ? EMPTY : `${q.position.toFixed(1)}위`}
+                <b className="text-foreground">{formatNumber(q.clicks)}</b> 클릭
+                · {q.position === null ? EMPTY : `${q.position.toFixed(1)}위`}
               </span>
             </li>
           ))}
@@ -281,20 +456,30 @@ export function OrganicSection({ data }: { data: Metrics }) {
 
   return (
     <div className="min-w-0">
-      <h2 className="mb-3 px-1 text-t4 font-bold text-foreground">오가닉 · 플레이스</h2>
+      <h2 className="mb-3 px-1 text-t4 font-bold text-foreground">
+        오가닉 · 플레이스
+      </h2>
       {empty ? (
         <div className="rounded-card bg-card p-5">
           <EmptyState>
-            {data.client === "cellora" ? "이 클라이언트는 오가닉 채널 데이터가 없어요" : "선택한 기간에 오가닉 데이터가 없어요"}
+            {data.client === "cellora"
+              ? "이 클라이언트는 오가닉 채널 데이터가 없어요"
+              : "선택한 기간에 오가닉 데이터가 없어요"}
           </EmptyState>
         </div>
       ) : (
         <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {place && <PlaceCard place={place} compareLabel={data.compareLabel} />}
+          {place && (
+            <PlaceCard place={place} compareLabel={data.compareLabel} />
+          )}
           {viral && <ViralCard viral={viral} />}
           {sns.length > 0 && <SnsCard sns={sns} />}
-          {search && <SearchCard search={search} compareLabel={data.compareLabel} />}
-          {youtube && <YoutubeCard youtube={youtube} compareLabel={data.compareLabel} />}
+          {search && (
+            <SearchCard search={search} compareLabel={data.compareLabel} />
+          )}
+          {youtube && (
+            <YoutubeCard youtube={youtube} compareLabel={data.compareLabel} />
+          )}
         </div>
       )}
     </div>

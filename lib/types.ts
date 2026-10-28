@@ -31,8 +31,9 @@ export type ViralStat = {
 export type SnsStat = {
   client: ClientSlug;
   platform: "instagram" | "youtube" | "tiktok";
+  account?: string; // @핸들. 한 클라이언트에 같은 플랫폼 계정이 여럿일 때 구분
   weekStart: string;
-  followers: number;
+  followers: number | null; // 모르면 null (인스타그램 연결 전 주 등)
   views: number | null; // 모르면 null (유튜브 첫 주 등)
 };
 

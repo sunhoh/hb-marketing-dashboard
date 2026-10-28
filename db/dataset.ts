@@ -1,5 +1,5 @@
 /**
- * DB → Dataset. API 의 일 단위 행은 주(월요일) 단위로 합쳐서 샘플 데이터와 같은 모양으로 만든다.
+ * DB → Dataset. API 의 일 단위 행은 주(월요일) 단위로 합친다.
  */
 import "server-only";
 import { and, desc, eq, gte } from "drizzle-orm";
@@ -183,7 +183,6 @@ export async function loadDbDataset(): Promise<{
   }
 
   const dataset: Dataset = {
-    source: "db",
     today,
     weeks,
     weekly: toWeekly(channelRows, (r) => r.segment || undefined),
@@ -261,6 +260,7 @@ export async function loadDbDataset(): Promise<{
     sns: sns.map((s) => ({
       client: s.client,
       platform: s.platform,
+      account: s.account || undefined,
       weekStart: s.weekStart,
       followers: s.followers,
       views: s.views,
