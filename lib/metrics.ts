@@ -2,7 +2,7 @@
  * 파생 지표 공통 함수. 화면 어디서든 CTR·CPC·CPM·증감률은 여기서만 계산한다.
  * 분모가 0이면 null 을 돌려주고, 표시할 때 "—" 로 바꾼다.
  */
-import type { Totals, WeeklyMetric } from "./types";
+import type { Totals, AdMetric } from "./types";
 
 export const EMPTY = "—";
 
@@ -35,7 +35,7 @@ export function changeRate(current: number | null, previous: number | null) {
   return v === null ? null : v * 100;
 }
 
-export function sumTotals(rows: Pick<WeeklyMetric, "spend" | "impressions" | "clicks" | "conversions">[]): Totals {
+export function sumTotals(rows: Pick<AdMetric, "spend" | "impressions" | "clicks" | "conversions">[]): Totals {
   return rows.reduce<Totals>(
     (acc, r) => ({
       spend: acc.spend + r.spend,

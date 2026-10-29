@@ -3,29 +3,38 @@
  */
 import { CHANNEL_LABELS, CLIENTS, CONVERSION_LABELS } from "./clients";
 import { cpc, ctr, deriveAll, sumTotals, type DerivedTotals } from "./metrics";
-import { addDays, mondayOf, PERIODS, resolvePeriod } from "./periods";
+import {
+  addDays,
+  type DateRange,
+  inRange,
+  mondayOf,
+  PERIODS,
+  resolvePeriod,
+} from "./periods";
 import { CONVERSION_EVENTS, sourceLabel } from "./web-config";
 import type {
+  AdMetric,
   ClientSlug,
   Creative,
   PeriodKey,
   SnsStat,
   VideoStat,
-  WeeklyMetric,
 } from "./types";
 
 /** db/dataset.ts 가 채우는 원본 묶음 */
 export type Dataset = {
   today: string; // 기준일 YYYY-MM-DD
-  weeks: string[]; // today 가 속한 주까지의 월요일(오래된 순)
-  weekly: WeeklyMetric[]; // 채널·세그먼트 단위
+  weeks: string[]; // today 가 속한 주까지의 월요일(오래된 순) — 주별 추이·SNS 용
+  daily: AdMetric[]; // 날짜 × 채널·세그먼트·캠페인·세부
+
+  activeById: Record<string, boolean>; // 캠페인·소재 ID → 동기화 시점에 켜져 있었나
   creatives: Creative[];
-  creativeWeekly: WeeklyMetric[]; // 소재 단위, segment = 소재 ID
+  creativeDaily: AdMetric[]; // 날짜 × 소재, segment = 소재 ID
   sns: SnsStat[];
   videos: VideoStat[];
   ga4: {
     client: ClientSlug;
-    weekStart: string;
+    date: string;
     sourceMedium: string;
     sessions: number;
     newUsers: number;
@@ -33,14 +42,14 @@ export type Dataset = {
   }[];
   gsc: {
     client: ClientSlug;
-    weekStart: string;
+    date: string;
     clicks: number;
     impressions: number;
     positionSum: number;
   }[];
   gscQueries: {
     client: ClientSlug;
-    weekStart: string;
+    date: string;
     query: string;
     clicks: number;
     impressions: number;
@@ -48,9 +57,10 @@ export type Dataset = {
   }[];
 };
 
-/** 채널 표에서 '평소보다 나쁨'으로 칠하는 문턱 (기준 = 같은 채널·세부의 직전 12주) */
+/** 채널 표에서 '평소보다 나쁨'으로 칠하는 문턱 (기준 = 같은 채널·세부의 기간 시작 전 12주) */
 export const BASELINE_TOLERANCE = 0.2;
 export const BASELINE_WEEKS = 12;
+const TREND_WEEKS = 12;
 export const YOUTUBE_TOP = 5;
 /** 홈페이지 유입 표에 따로 보여 줄 유입 경로 수(나머지는 '기타') */
 export const WEB_SOURCE_ROWS = 8;
@@ -69,8 +79,11 @@ export type ChannelRow = DerivedTotals & {
   channel: string;
   channelLabel: string;
   segment?: string;
+  account?: string; // 캠페인 행만
+  active?: boolean | null; // 캠페인·소재 행만. null = 상태를 모름
   conversionLabel: string;
   baseline: { ctr: number | null; cpc: number | null; cpm: number | null };
+  subRows?: ChannelRow[]; // 펼치면 보이는 한 단계 아래(국가별 → 캠페인, 캠페인별 → 소재·광고그룹)
 };
 
 export type CreativeRow = DerivedTotals & {
@@ -98,9 +111,16 @@ function byClient<T extends { client: ClientSlug }>(
   return rows.filter((r) => r.client === client);
 }
 
-function inWeeks<T extends { weekStart: string }>(rows: T[], weeks: string[]) {
-  const set = new Set(weeks);
-  return rows.filter((r) => set.has(r.weekStart));
+function within<T extends { date: string }>(rows: T[], range: DateRange) {
+  return rows.filter((r) => inRange(r.date, range));
+}
+
+/** SNS 처럼 주 단위로만 있는 값: 월요일이 기간 안에 있는 주 */
+function weeksWithin<T extends { weekStart: string }>(
+  rows: T[],
+  range: DateRange,
+) {
+  return rows.filter((r) => inRange(r.weekStart, range));
 }
 
 function groupBy<T>(rows: T[], key: (r: T) => string) {
@@ -118,78 +138,117 @@ export function buildMetrics(
   period: PeriodKey,
 ) {
   const periodInfo = PERIODS.find((p) => p.key === period)!;
-  const weeks = resolvePeriod(period, ds.weeks, ds.today);
-  const lastWeek = weeks.current[weeks.current.length - 1];
-  const rangeStart = weeks.current[0] ?? null;
-  const rangeEnd = lastWeek
-    ? addDays(lastWeek, 6) > ds.today
-      ? ds.today
-      : addDays(lastWeek, 6)
-    : null;
+  const range = resolvePeriod(period, ds.today);
 
-  const metrics = byClient(ds.weekly, client);
-  const current = inWeeks(metrics, weeks.current);
-  const previous = inWeeks(metrics, weeks.previous);
+  const metrics = byClient(ds.daily, client);
+  const current = within(metrics, range.current);
+  const previous = within(metrics, range.previous);
 
   // 요약 카드
   const summary = deriveAll(sumTotals(current));
   const summaryPrevious = deriveAll(sumTotals(previous));
 
-  // 주별 추이 — 항상 최근 12주, 선택 기간에 속한 주는 표시
-  const trendWeeks = ds.weeks.slice(-12);
-  const currentSet = new Set(weeks.current);
-  const weekly = trendWeeks.map((weekStart) => {
-    const t = sumTotals(metrics.filter((r) => r.weekStart === weekStart));
+  // 주별 추이 — 항상 최근 12주, 선택 기간과 겹치는 주는 표시
+  const weekly = ds.weeks.slice(-TREND_WEEKS).map((weekStart) => {
+    const week = { start: weekStart, end: addDays(weekStart, 6) };
+    const t = sumTotals(within(metrics, week));
     return {
       weekStart,
-      inPeriod: currentSet.has(weekStart),
+      inPeriod:
+        week.start <= range.current.end && week.end >= range.current.start,
       spend: t.spend,
       ctr: ctr(t),
       cpc: cpc(t),
     };
   });
 
-  // 채널별 표 — 기준은 같은 행(채널·세부)의 선택 기간 직전 12주
-  const rowKey = (r: WeeklyMetric) =>
-    `${r.client}|${r.channel}|${r.segment ?? ""}`;
-  const periodStart = weeks.current[0];
-  const startIdx = periodStart ? ds.weeks.indexOf(periodStart) : -1;
-  const baselineWeeks =
-    startIdx > 0
-      ? ds.weeks.slice(Math.max(0, startIdx - BASELINE_WEEKS), startIdx)
-      : [];
-  const baselines = new Map(
-    [...groupBy(inWeeks(metrics, baselineWeeks), rowKey)].map(([id, rows]) => [
-      id,
-      deriveAll(sumTotals(rows)),
-    ]),
-  );
-  const channels: ChannelRow[] = [...groupBy(current, rowKey)].map(
-    ([id, rows]) => {
-      const { client: slug, channel, segment } = rows[0] as WeeklyMetric;
-      const base = baselines.get(id);
+  // 채널별 표 — 기준은 같은 행(채널·세부)의 기간 시작 전 12주
+  const baselineRows = within(metrics, {
+    start: addDays(range.current.start, -BASELINE_WEEKS * 7),
+    end: addDays(range.current.start, -1),
+  });
+
+  /** key 로 묶어 한 줄씩. describe 로 줄 이름을, sub 로 펼칠 아래 줄을 만든다 */
+  const buildRows = (
+    rows: AdMetric[],
+    base: AdMetric[],
+    key: (r: AdMetric) => string,
+    describe: (r: AdMetric) => Partial<ChannelRow>,
+    sub?: (rows: AdMetric[], base: AdMetric[]) => ChannelRow[],
+  ): ChannelRow[] => {
+    const baseByKey = groupBy(base, key);
+    return [...groupBy(rows, key)].map(([id, list]) => {
+      const first = list[0] as AdMetric;
+      const b = deriveAll(sumTotals(baseByKey.get(id) ?? []));
+      const children = sub?.(list, baseByKey.get(id) ?? []);
       return {
         id,
-        client: slug,
-        clientName: clientName(slug),
-        channel,
-        channelLabel: CHANNEL_LABELS[channel] ?? channel,
-        segment,
-        conversionLabel: CONVERSION_LABELS[channel] ?? "매체 전환",
-        baseline: {
-          ctr: base?.ctr ?? null,
-          cpc: base?.cpc ?? null,
-          cpm: base?.cpm ?? null,
-        },
-        ...deriveAll(sumTotals(rows)),
+        client: first.client,
+        clientName: clientName(first.client),
+        channel: first.channel,
+        channelLabel: CHANNEL_LABELS[first.channel] ?? first.channel,
+        conversionLabel: CONVERSION_LABELS[first.channel] ?? "매체 전환",
+        baseline: baseByKey.has(id)
+          ? { ctr: b.ctr, cpc: b.cpc, cpm: b.cpm }
+          : { ctr: null, cpc: null, cpm: null },
+        ...describe(first),
+        ...deriveAll(sumTotals(list)),
+        // 아래 줄이 하나뿐이고 이름도 같으면(국가별 보기의 네이버 캠페인 등) 펼칠 게 없다
+        subRows:
+          children &&
+          (children.length > 1 ||
+            (children.length === 1 &&
+              children[0].segment !== describe(first).segment))
+            ? children
+            : undefined,
       };
-    },
+    });
+  };
+  const channelKey = (r: AdMetric) => `${r.client}|${r.channel}`;
+  const campaignOf = (r: AdMetric): Partial<ChannelRow> => ({
+    segment: r.campaign,
+    account: r.account,
+    active: r.campaignId ? (ds.activeById[r.campaignId] ?? null) : null,
+  });
+
+  // 국가별(기존 보기): 채널 · 국가(네이버는 캠페인) → 펼치면 캠페인
+  const channels = buildRows(
+    current,
+    baselineRows,
+    (r) => `${channelKey(r)}|${r.segment ?? ""}`,
+    (r) => ({ segment: r.segment }),
+    (rows, base) =>
+      rows[0].channel === "meta"
+        ? buildRows(rows, base, (r) => `${r.campaignId}`, campaignOf)
+        : [],
+  );
+  // 캠페인별: 채널 · 캠페인 → 펼치면 소재(메타)·광고그룹(네이버)
+  const campaigns = buildRows(
+    current,
+    baselineRows,
+    (r) => `${channelKey(r)}|${r.campaignId ?? r.segment ?? ""}`,
+    (r) => (r.campaignId ? campaignOf(r) : { segment: r.segment }),
+    (rows, base) =>
+      rows.some((r) => r.detailId)
+        ? buildRows(
+            rows,
+            base,
+            (r) => r.detailId ?? "",
+            (r) => ({
+              segment: r.detail ?? "—",
+              active:
+                r.channel === "meta" && r.detailId
+                  ? (ds.activeById[r.detailId] ?? null)
+                  : null,
+            }),
+          )
+        : [],
   );
 
   // 메타 소재
-  const creativeCurrent = inWeeks(
-    byClient(ds.creativeWeekly, client),
-    weeks.current,
+  const creativeCurrent = within(
+    byClient(ds.creativeDaily, client),
+    range.current,
   );
   const creatives: CreativeRow[] = [];
   for (const [slug, rows] of groupBy(creativeCurrent, (r) => r.client)) {
@@ -241,30 +300,25 @@ export function buildMetrics(
     }
   }
 
-  // 오가닉
-  const prevLastWeek = weeks.previous[weeks.previous.length - 1];
-
+  // 오가닉 — SNS 는 주 단위로만 있어서 월요일이 기간 안에 있는 주로 계산한다
   const snsRows = byClient(ds.sns, client);
   const sns = [
     ...groupBy(snsRows, (r) => `${r.client}|${r.platform}|${r.account ?? ""}`),
   ].map(([, rows]) => {
-    const at = (w: string | undefined) => rows.find((r) => r.weekStart === w);
     /** 기간 안에 조회수를 아는 주가 하나도 없으면 null(— 표시) */
-    const sumViews = (ws: string[]) => {
-      const known = inWeeks(rows, ws).filter((r) => r.views !== null);
-      return known.length ? known.reduce((a, r) => a + r.views!, 0) : null;
+    const sumViews = (r: DateRange) => {
+      const known = weeksWithin(rows, r).filter((x) => x.views !== null);
+      return known.length ? known.reduce((a, x) => a + x.views!, 0) : null;
     };
-    const first = rows[0] as SnsStat;
-    // 기간 마지막 주 값이 없으면(이번 주 스냅숏 전) 그 전에 알던 가장 최근 값
-    const end =
-      at(lastWeek)?.followers ??
+    /** date 가 속한 주까지 알던 가장 최근 팔로워 */
+    const followersAt = (date: string) =>
       [...rows]
         .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
-        .find(
-          (r) => r.followers !== null && (!lastWeek || r.weekStart <= lastWeek),
-        )?.followers ??
-      null;
-    const startFollowers = at(prevLastWeek)?.followers ?? null;
+        .find((r) => r.followers !== null && r.weekStart <= mondayOf(date))
+        ?.followers ?? null;
+    const first = rows[0] as SnsStat;
+    const end = followersAt(range.current.end);
+    const startFollowers = followersAt(addDays(range.current.start, -1));
     return {
       client: first.client,
       clientName: clientName(first.client),
@@ -273,22 +327,20 @@ export function buildMetrics(
       followers: end,
       followerChange:
         end === null || startFollowers === null ? null : end - startFollowers,
-      views: sumViews(weeks.current),
-      previousViews: sumViews(weeks.previous),
+      views: sumViews(range.current),
+      previousViews: sumViews(range.previous),
     };
   });
 
-  // 유튜브 영상 — 업로드한 주가 기간에 속한 영상
+  // 유튜브 영상 — 기간 안에 올린 영상
   const videoRows = byClient(ds.videos, client);
-  const inPeriodWeeks = (ws: string[]) => {
-    const set = new Set(ws);
-    return videoRows.filter((v) => set.has(mondayOf(v.publishedOn)));
-  };
-  const currentVideos = inPeriodWeeks(weeks.current);
+  const uploadedIn = (r: DateRange) =>
+    videoRows.filter((v) => inRange(v.publishedOn, r));
+  const currentVideos = uploadedIn(range.current);
   const youtube = videoRows.length
     ? {
         uploads: currentVideos.length,
-        previousUploads: inPeriodWeeks(weeks.previous).length,
+        previousUploads: uploadedIn(range.previous).length,
         shorts: currentVideos.filter((v) => v.isShort).length,
         top: [...currentVideos]
           .sort((a, b) => b.views - a.views)
@@ -311,8 +363,8 @@ export function buildMetrics(
     );
   const webRate = (t: { sessions: number; conversions: number }) =>
     t.sessions ? (t.conversions / t.sessions) * 100 : null;
-  const webCurrent = inWeeks(ga4Rows, weeks.current);
-  const webPrevious = inWeeks(ga4Rows, weeks.previous);
+  const webCurrent = within(ga4Rows, range.current);
+  const webPrevious = within(ga4Rows, range.previous);
   const bySource = [...groupBy(webCurrent, (r) => sourceLabel(r.sourceMedium))]
     .map(([label, rows]) => {
       const t = sumWeb(rows);
@@ -389,11 +441,11 @@ export function buildMetrics(
       position: t.impressions ? t.positionSum / t.impressions : null,
     };
   };
-  const queryCurrent = inWeeks(byClient(ds.gscQueries, client), weeks.current);
+  const queryCurrent = within(byClient(ds.gscQueries, client), range.current);
   const search = gscRows.length
     ? {
-        current: sumSearch(inWeeks(gscRows, weeks.current)),
-        previous: sumSearch(inWeeks(gscRows, weeks.previous)),
+        current: sumSearch(within(gscRows, range.current)),
+        previous: sumSearch(within(gscRows, range.previous)),
         queries: [...groupBy(queryCurrent, (r) => r.query)]
           .map(([query, rows]) => ({ query, ...sumSearch(rows) }))
           .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
@@ -406,12 +458,14 @@ export function buildMetrics(
     period,
     periodLabel: periodInfo.label,
     compareLabel: periodInfo.compareLabel,
-    range: { start: rangeStart, end: rangeEnd },
+    range: range.current,
+    previousRange: range.previous,
     asOf: ds.today,
     summary,
     summaryPrevious,
     weekly,
     channels,
+    campaigns,
     creatives,
     web,
     organic: { sns, youtube, search },

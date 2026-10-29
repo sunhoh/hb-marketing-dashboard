@@ -13,7 +13,7 @@
 import { createHmac } from "node:crypto";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { adMetrics, syncRuns, type AdChannel } from "@/db/schema";
+import { adMetrics, campaigns, syncRuns, type AdChannel } from "@/db/schema";
 import { addDays } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
 
@@ -53,7 +53,9 @@ type Campaign = {
   nccCampaignId: string;
   name: string;
   campaignTp: string;
-  status?: string;
+  status?: string; // ELIGIBLE / PAUSED / LIMITED_BY_BUDGET …
+  userLock?: boolean; // 광고주센터에서 끈 캠페인
+  delFlag?: boolean;
 };
 type Adgroup = {
   nccAdgroupId: string;
@@ -160,11 +162,15 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
     .returning({ id: syncRuns.id });
 
   try {
-    const campaigns = await call<Campaign[]>(cfg, customerId, "/ncc/campaigns");
+    const nccCampaigns = await call<Campaign[]>(
+      cfg,
+      customerId,
+      "/ncc/campaigns",
+    );
     let bizChannels: Map<string, string> | undefined;
 
     const units: Unit[] = [];
-    for (const c of campaigns) {
+    for (const c of nccCampaigns) {
       const channel = CHANNEL_BY_CAMPAIGN_TYPE[c.campaignTp];
       const base = {
         type: c.campaignTp,
@@ -281,6 +287,26 @@ export async function syncNaverSearchAd(days = DEFAULT_DAYS) {
           ),
         );
       if (rows.length) await tx.insert(adMetrics).values(rows);
+      // 캠페인 켜짐/꺼짐 — 예산 소진(LIMITED_BY_BUDGET) 같은 상태는 켜 둔 것으로 본다
+      for (const c of nccCampaigns) {
+        const channel = CHANNEL_BY_CAMPAIGN_TYPE[c.campaignTp];
+        if (!channel) continue;
+        const row = {
+          id: c.nccCampaignId,
+          channel,
+          accountId: customerId,
+          name: c.name,
+          active: !c.userLock && !c.delFlag && c.status !== "PAUSED",
+          status: c.status ?? null,
+        };
+        await tx
+          .insert(campaigns)
+          .values(row)
+          .onConflictDoUpdate({
+            target: campaigns.id,
+            set: { ...row, updatedAt: sql`now()` },
+          });
+      }
     });
 
     const spendOf = (id: string) =>

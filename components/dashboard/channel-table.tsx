@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  createExpandedRowModel,
   createSortedRowModel,
   metaHelper,
+  rowExpandingFeature,
   rowSortingFeature,
   sortFn_text,
   tableFeatures,
@@ -10,7 +12,7 @@ import {
   type ColumnDef,
   type SortFn,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import {
   Table,
@@ -20,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BASELINE_TOLERANCE,
   BASELINE_WEEKS,
@@ -27,6 +30,7 @@ import {
   type Metrics,
 } from "@/lib/build-metrics";
 import { formatNumber, formatPercent, formatWon } from "@/lib/metrics";
+import { type TableView, useTableView } from "@/lib/use-preferences";
 import { cn } from "@/lib/utils";
 import { EmptyState, Section } from "./primitives";
 
@@ -44,9 +48,16 @@ type ColumnMeta = { numeric?: boolean; flag?: "ctr" | "cpc" | "cpm" };
 type NumericKey =
   "spend" | "impressions" | "clicks" | "conversions" | "ctr" | "cpc" | "cpm";
 
+const VIEWS: { value: TableView; label: string }[] = [
+  { value: "campaign", label: "캠페인별" },
+  { value: "country", label: "국가별" },
+];
+
 const features = tableFeatures({
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
+  rowExpandingFeature,
+  expandedRowModel: createExpandedRowModel(),
   sortFns: { text: sortFn_text },
   columnMeta: metaHelper<ColumnMeta>(),
 });
@@ -62,7 +73,37 @@ const numericSort: SortFn<typeof features, ChannelRow> = (a, b, id) => {
   return x - y;
 };
 
+/** 캠페인 이름 옆: 광고 계정(계정이 여럿일 때만), 꺼짐 */
+function CampaignTags({
+  row,
+  showAccount,
+}: {
+  row: ChannelRow;
+  showAccount: boolean;
+}) {
+  return (
+    <>
+      {showAccount && row.account && (
+        <span className="ml-1.5 shrink-0 text-st12 font-normal whitespace-nowrap text-subtle">
+          {row.account}
+        </span>
+      )}
+      {row.active === false && (
+        <span className="ml-1.5 inline-flex h-5 shrink-0 items-center rounded-md bg-surface px-1.5 align-middle text-st12 font-semibold text-subtle">
+          꺼짐
+        </span>
+      )}
+    </>
+  );
+}
+
 export function ChannelTable({ data }: { data: Metrics }) {
+  const [view, setView] = useTableView();
+  const rows = view === "campaign" ? data.campaigns : data.channels;
+  // 메타 계정이 여럿인 클라이언트(GU강남)만 캠페인 옆에 계정 이름을 붙인다
+  const showAccount =
+    new Set(data.campaigns.map((r) => r.account).filter(Boolean)).size > 1;
+
   const columns = useMemo<Col[]>(() => {
     const num = (
       key: NumericKey,
@@ -86,17 +127,57 @@ export function ChannelTable({ data }: { data: Metrics }) {
         accessorFn: (r) => `${r.channelLabel} ${r.segment ?? ""}`,
         header: "채널 · 세부",
         sortFn: "text",
-        cell: ({ row }) => (
-          <span className="font-semibold text-foreground">
-            {row.original.channelLabel}
-            {row.original.segment && (
-              <span className="font-normal text-body">
-                {" "}
-                · {row.original.segment}
+        cell: ({ row }) => {
+          const r = row.original;
+          if (row.depth > 0)
+            return (
+              <span className="flex items-center pl-7 text-body">
+                <span className="max-w-[320px] truncate" title={r.segment}>
+                  {r.segment}
+                </span>
+                <CampaignTags row={r} showAccount={showAccount} />
               </span>
-            )}
-          </span>
-        ),
+            );
+          const expanded = row.getIsExpanded();
+          return (
+            <span className="flex items-center gap-1">
+              {row.getCanExpand() ? (
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-label={expanded ? "접기" : "펼치기"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    row.toggleExpanded();
+                  }}
+                  className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-subtle outline-none hover:bg-surface hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring"
+                >
+                  <ChevronRight
+                    aria-hidden
+                    className={cn(
+                      "size-4 transition-transform",
+                      expanded && "rotate-90",
+                    )}
+                  />
+                </button>
+              ) : (
+                <span className="size-6 shrink-0" />
+              )}
+              <span className="flex min-w-0 items-center font-semibold whitespace-nowrap text-foreground">
+                {r.channelLabel}
+                {r.segment && (
+                  <span
+                    className="ml-1 max-w-[320px] truncate font-normal text-body"
+                    title={r.segment}
+                  >
+                    · {r.segment}
+                  </span>
+                )}
+                <CampaignTags row={r} showAccount={showAccount} />
+              </span>
+            </span>
+          );
+        },
       },
       num("spend", "소진액", formatWon),
       num("impressions", "노출", formatNumber),
@@ -116,21 +197,43 @@ export function ChannelTable({ data }: { data: Metrics }) {
         ),
       },
     ];
-  }, []);
+  }, [showAccount]);
 
   const table = useTable({
     features,
     columns,
-    data: data.channels,
+    data: rows,
+    getSubRows: (r) => r.subRows,
     initialState: { sorting: [{ id: "spend", desc: true }] },
   });
 
   return (
     <Section
       title="채널별 효율"
+      action={
+        <Tabs value={view} onValueChange={(v) => setView(v as TableView)}>
+          <TabsList
+            aria-label="묶는 기준"
+            className="h-9! rounded-xl bg-surface p-1"
+          >
+            {VIEWS.map((v) => (
+              <TabsTrigger
+                key={v.value}
+                value={v.value}
+                className="h-7 cursor-pointer rounded-lg px-3 text-st12 font-semibold text-subtle data-active:bg-card! data-active:text-foreground data-active:shadow-none! dark:data-active:border-transparent"
+              >
+                {v.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      }
       description={
         <>
-          머리글을 누르면 정렬돼요 ·{" "}
+          {view === "campaign"
+            ? "캠페인을 누르면 소재(네이버는 광고그룹)별로 펼쳐져요"
+            : "메타 국가를 누르면 캠페인별로 펼쳐져요"}{" "}
+          · 머리글을 누르면 정렬돼요 ·{" "}
           <span className="rounded-sm bg-warn-bg px-1 text-warn-fg">
             주황 칸
           </span>{" "}
@@ -139,7 +242,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
         </>
       }
     >
-      {data.channels.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState>선택한 기간에 매체 데이터가 없어요</EmptyState>
       ) : (
         <div className="-mx-5 sm:-mx-6">
@@ -198,7 +301,14 @@ export function ChannelTable({ data }: { data: Metrics }) {
               {table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="border-border hover:bg-surface/60"
+                  onClick={
+                    row.getCanExpand() ? () => row.toggleExpanded() : undefined
+                  }
+                  className={cn(
+                    "border-border hover:bg-surface/60",
+                    row.getCanExpand() && "cursor-pointer",
+                    row.depth > 0 && "bg-surface/40 text-t7",
+                  )}
                 >
                   {row.getAllCells().map((cell, i, cells) => {
                     const meta = cell.column.columnDef.meta;

@@ -17,7 +17,10 @@ function createDb() {
   const local = hostname === "localhost" || hostname === "127.0.0.1";
 
   const client = postgres(url, {
-    max: 5,
+    // 화면 데이터(db/dataset.ts)가 쿼리 9개를 한꺼번에 보낸다. 연결이 그보다 적으면 한 연결에 쿼리를
+    // 줄줄이 이어 보내는데(파이프라이닝), Supabase Transaction pooler(6543)에서는 이게 가끔 멈춘다
+    // (2026-10-29 확인: 5개일 때 8번 중 5번 멈춤, 10개일 때 0번). 쿼리를 늘리면 이 숫자도 함께 늘린다.
+    max: 10,
     ssl: local ? false : "require",
     // Supabase Transaction pooler(6543)는 prepared statement 를 지원하지 않는다
     prepare: port !== "6543",

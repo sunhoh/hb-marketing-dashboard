@@ -10,7 +10,13 @@
  */
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { adMetrics, creatives, syncRuns, type Country } from "@/db/schema";
+import {
+  adMetrics,
+  campaigns,
+  creatives,
+  syncRuns,
+  type Country,
+} from "@/db/schema";
 import { addDays } from "@/lib/periods";
 import type { ClientSlug } from "@/lib/types";
 
@@ -83,6 +89,9 @@ type InsightRow = {
   campaign_name?: string;
 };
 type Paged<T> = { data: T[]; paging?: { next?: string } };
+type CampaignInfo = { id: string; name: string; effective_status?: string };
+/** 메타 effective_status 중 광고가 나가고 있는 상태(검토 중·문제 있음도 켜 둔 것) */
+const ACTIVE_STATUSES = ["ACTIVE", "IN_PROCESS", "WITH_ISSUES"];
 type AdInfo = {
   id: string;
   name: string;
@@ -354,7 +363,64 @@ export async function syncMeta(days = DEFAULT_DAYS) {
       }
     }
 
+    // 캠페인 켜짐/꺼짐. 목록에 없으면(지워진 캠페인) 꺼짐으로 둔다
+    const campaignInfos = new Map<
+      string,
+      CampaignInfo & { accountId: string }
+    >();
+    for (const acc of META_AD_ACCOUNTS) {
+      const list = await allPages<CampaignInfo>(
+        `${API}/${acc.id}/campaigns?${new URLSearchParams({
+          fields: "id,name,effective_status",
+          limit: "200",
+          filtering: JSON.stringify([
+            {
+              field: "effective_status",
+              operator: "IN",
+              value: [
+                "ACTIVE",
+                "PAUSED",
+                "ARCHIVED",
+                "IN_PROCESS",
+                "WITH_ISSUES",
+              ],
+            },
+          ]),
+        })}`,
+      );
+      for (const c of list)
+        campaignInfos.set(c.id, { ...c, accountId: acc.id });
+    }
+    const campaignRows = new Map<string, typeof campaigns.$inferInsert>();
+    for (const c of campaignInfos.values())
+      campaignRows.set(c.id, {
+        id: c.id,
+        channel: "meta",
+        accountId: c.accountId,
+        name: c.name,
+        active: ACTIVE_STATUSES.includes(c.effective_status ?? ""),
+        status: c.effective_status ?? null,
+      });
+    for (const ad of ads.values())
+      if (!campaignRows.has(ad.campaignId))
+        campaignRows.set(ad.campaignId, {
+          id: ad.campaignId,
+          channel: "meta",
+          accountId: ad.accountId,
+          name: ad.campaignName,
+          active: false,
+          status: null,
+        });
+
     await db.transaction(async (tx) => {
+      for (const row of campaignRows.values())
+        await tx
+          .insert(campaigns)
+          .values(row)
+          .onConflictDoUpdate({
+            target: campaigns.id,
+            set: { ...row, updatedAt: sql`now()` },
+          });
       // 소재를 먼저 넣어야 ad_metrics.creative_id 가 가리킬 수 있다
       for (const [id, ad] of ads) {
         const info = infos.get(id);

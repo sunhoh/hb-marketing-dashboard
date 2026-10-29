@@ -156,6 +156,22 @@ export const adMetrics = pgTable(
 );
 
 /**
+ * 캠페인 켜짐/꺼짐(동기화 시점). 채널별 효율 표의 "꺼짐" 표시에 쓴다.
+ * 클라이언트는 넣지 않는다 — 네이버는 한 캠페인이 광고그룹별로 여러 클라이언트에 나뉠 수 있어서 ad_metrics 행이 정한다.
+ */
+export const campaigns = pgTable("campaigns", {
+  id: text("id").primaryKey(), // 네이버 nccCampaignId / 메타 캠페인 ID
+  channel: adChannelEnum("channel").notNull(),
+  accountId: text("account_id").notNull(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull(),
+  status: text("status"), // 매체 값 그대로(메타 effective_status, 네이버 status)
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
  * SNS 주간 요약(화면이 읽는 표): 그 주 마지막 날 팔로워·구독자와 그 주 조회수.
  *   · 인스타그램 조회수: 계정 인사이트 views(릴스·게시물·스토리, 광고 포함)를 주 단위로 바로 받는다.
  *   · 유튜브 조회수: API 가 누적값만 줘서 sns_daily 로 계산한다.

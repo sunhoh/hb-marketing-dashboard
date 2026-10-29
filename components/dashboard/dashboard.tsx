@@ -62,7 +62,10 @@ function LoadingOverlay() {
       role="status"
     >
       <div className="inline-flex items-center gap-2 text-t6 font-semibold text-foreground">
-        <LoaderCircle aria-hidden className="size-4 animate-spin text-primary" />
+        <LoaderCircle
+          aria-hidden
+          className="size-4 animate-spin text-primary"
+        />
         불러오는 중…
       </div>
     </div>
@@ -190,10 +193,12 @@ export function Dashboard({ client }: { client: ClientSlug }) {
           {data && (
             <span className="tabular text-subtle">
               {" "}
-              · {data.periodLabel}
-              {data.range.start &&
-                data.range.end &&
-                ` ${shortDate(data.range.start)} ~ ${shortDate(data.range.end)}`}
+              · {data.periodLabel}{" "}
+              {data.range.start <= data.range.end
+                ? `${shortDate(data.range.start)} ~ ${shortDate(data.range.end)}`
+                : "(아직 데이터 없음)"}
+              {data.previousRange.start <= data.previousRange.end &&
+                ` · 비교 ${shortDate(data.previousRange.start)} ~ ${shortDate(data.previousRange.end)}`}
             </span>
           )}
         </p>
@@ -235,8 +240,9 @@ export function Dashboard({ client }: { client: ClientSlug }) {
             <OrganicSection data={data} />
           </div>
           <p className="mt-6 px-1 text-st12 text-subtle">
-            기준일 {data.asOf} · 주 시작일(월요일)이 속한 달로 기간을 나눠요 ·
-            CRM 지표(DB·상담·예약·매출)는 2단계에서 연결합니다
+            기준일 {data.asOf} · 이번 달은 1일~어제, 전월 대비는 지난달 같은
+            날짜까지와 비교해요 · SNS 조회수는 주 단위(월요일이 기간 안에 있는
+            주) · CRM 지표(DB·상담·예약·매출)는 2단계에서 연결합니다
           </p>
         </main>
       ) : (
