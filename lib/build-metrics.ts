@@ -148,14 +148,28 @@ export function buildMetrics(
   const summary = deriveAll(sumTotals(current));
   const summaryPrevious = deriveAll(sumTotals(previous));
 
-  // 주별 추이 — 항상 최근 12주, 선택 기간과 겹치는 주는 표시
+  // 주별 추이 — 항상 최근 12주, 선택 기간과 겹치는 주는 표시.
+  // 기간 경계에 걸친 주(예: 9/28~10/4 중 10/1~10/4 만 이번 달)는 겹친 날짜를 partial 로 알려 준다.
+  // 이번 주처럼 남은 날이 아직 오지 않은 것뿐이면 걸친 주로 보지 않는다.
+  const yesterday = addDays(ds.today, -1);
   const weekly = ds.weeks.slice(-TREND_WEEKS).map((weekStart) => {
     const week = { start: weekStart, end: addDays(weekStart, 6) };
     const t = sumTotals(within(metrics, week));
+    const inPeriod =
+      week.start <= range.current.end && week.end >= range.current.start;
+    const cutStart = week.start < range.current.start;
+    const cutEnd =
+      week.end > range.current.end && range.current.end < yesterday;
     return {
       weekStart,
-      inPeriod:
-        week.start <= range.current.end && week.end >= range.current.start,
+      inPeriod,
+      partial:
+        inPeriod && (cutStart || cutEnd)
+          ? {
+              start: cutStart ? range.current.start : week.start,
+              end: cutEnd ? range.current.end : week.end,
+            }
+          : null,
       spend: t.spend,
       ctr: ctr(t),
       cpc: cpc(t),

@@ -21,15 +21,26 @@ import { Section } from "./primitives";
 
 type Point = Metrics["weekly"][number];
 
-function ChartTooltip({ active, payload }: TooltipContentProps<ValueType, NameType>) {
+function ChartTooltip({
+  active,
+  payload,
+  period,
+}: TooltipContentProps<ValueType, NameType> & { period: string }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload as Point;
   return (
     <div className="rounded-xl bg-popover px-3.5 py-3 text-t7 text-popover-foreground shadow-lg ring-1 ring-border">
       <p className="mb-1.5 font-semibold">
         {shortDate(p.weekStart)} ~ {shortDate(addDays(p.weekStart, 6))}
-        {p.inPeriod && <span className="ml-1.5 text-weak-fg">선택 기간</span>}
+        {p.inPeriod && !p.partial && <span className="ml-1.5 text-weak-fg">선택 기간</span>}
       </p>
+      {p.partial && (
+        <p className="mb-1.5 text-st12 text-weak-fg">
+          {shortDate(p.partial.start)} ~ {shortDate(p.partial.end)}만 {period}에 포함
+          <br />
+          <span className="text-muted-foreground">아래 숫자는 한 주 전체 값</span>
+        </p>
+      )}
       <dl className="tabular grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
         <dt className="text-muted-foreground">소진액</dt>
         <dd className="text-right font-semibold">{formatWon(p.spend)}</dd>
@@ -59,7 +70,11 @@ export function TrendChart({ data }: { data: Metrics }) {
   return (
     <Section
       title="주별 추이"
-      description={`최근 12주 · 진한 막대가 선택한 기간(${data.periodLabel})`}
+      description={`최근 12주 · 진한 막대가 선택한 기간(${data.periodLabel})${
+        data.weekly.some((w) => w.partial)
+          ? " · 중간 색은 기간에 일부만 걸친 주"
+          : ""
+      }`}
     >
       <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-t7 text-body">
         <LegendItem swatch={<span className="size-2.5 rounded-[3px]" style={{ background: c["--chart-spend"] }} />} label="소진액" />
@@ -125,13 +140,20 @@ export function TrendChart({ data }: { data: Metrics }) {
               domain={[0, "auto"]}
             />
             <Tooltip
-              content={ChartTooltip}
+              content={(props) => (
+                <ChartTooltip {...props} period={data.periodLabel} />
+              )}
               cursor={{ fill: c["--chart-grid"], fillOpacity: 0.5 }}
               isAnimationActive={false}
             />
             <Bar yAxisId="spend" dataKey="spend" name="소진액" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false}>
               {data.weekly.map((w) => (
-                <Cell key={w.weekStart} fill={w.inPeriod ? c["--chart-spend"] : c["--chart-spend-dim"]} />
+                <Cell
+                  key={w.weekStart}
+                  fill={w.inPeriod ? c["--chart-spend"] : c["--chart-spend-dim"]}
+                  // 기간에 일부만 걸친 주: 진한 색을 반쯤 흐리게
+                  fillOpacity={w.partial ? 0.45 : 1}
+                />
               ))}
             </Bar>
             <Line
