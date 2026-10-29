@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Lock } from "lucide-react";
+import { LoaderCircle, Lock } from "lucide-react";
 import { useEffect } from "react";
 import { getClient } from "@/lib/clients";
 import type { Metrics } from "@/lib/build-metrics";
@@ -125,7 +125,7 @@ export function Dashboard({ client }: { client: ClientSlug }) {
     setClient(client);
   }, [client, setClient]);
 
-  const { data, isError, error } = useQuery({
+  const { data, isError, error, isPlaceholderData } = useQuery({
     queryKey: ["metrics", client, period],
     queryFn: () => fetchMetrics(client, period),
     placeholderData: keepPreviousData,
@@ -149,6 +149,15 @@ export function Dashboard({ client }: { client: ClientSlug }) {
             </span>
           )}
           {!blocked && <SyncButton />}
+          {isPlaceholderData && (
+            <span
+              className="inline-flex h-6 items-center gap-1 text-st12 font-semibold text-subtle"
+              role="status"
+            >
+              <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
+              불러오는 중…
+            </span>
+          )}
         </div>
         <h1 className="mt-1.5 text-t2 font-bold text-foreground sm:text-t1">
           {info.fullName}
@@ -188,7 +197,11 @@ export function Dashboard({ client }: { client: ClientSlug }) {
           <IpBlockedModal ip={blocked.ip} />
         </>
       ) : data ? (
-        <main className="mt-3 flex flex-col gap-3">
+        // 지점·기간을 바꾸면 새 데이터가 올 때까지 이전 화면을 흐리게 둔다
+        <main
+          className={`mt-3 flex flex-col gap-3 transition-opacity duration-200 ${isPlaceholderData ? "pointer-events-none opacity-40" : ""}`}
+          aria-busy={isPlaceholderData}
+        >
           <SummaryCards data={data} />
           <TrendChart data={data} />
           <ChannelTable data={data} />
