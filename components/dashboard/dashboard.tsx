@@ -1,6 +1,10 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { LoaderCircle, Lock } from "lucide-react";
 import { useEffect } from "react";
 import { getClient } from "@/lib/clients";
@@ -38,6 +42,31 @@ async function fetchMetrics(
   }
   if (!res.ok) throw new Error(`metrics ${res.status}`);
   return res.json();
+}
+
+/** 가장 최근에 받은 화면 데이터 — 다른 클라이언트로 넘어갈 때 새 데이터가 올 때까지 흐리게 깔아 둔다 */
+function latestMetrics(queryClient: QueryClient) {
+  return queryClient
+    .getQueryCache()
+    .findAll({ queryKey: ["metrics"] })
+    .filter((q) => q.state.data !== undefined)
+    .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)[0]?.state
+    .data as Metrics | undefined;
+}
+
+/** 화면 가운데 "불러오는 중" — 뒤 화면 클릭은 막지 않는다(필터는 계속 바꿀 수 있게) */
+function LoadingOverlay() {
+  return (
+    <div
+      className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center "
+      role="status"
+    >
+      <div className="inline-flex items-center gap-2 text-t6 font-semibold text-foreground">
+        <LoaderCircle aria-hidden className="size-4 animate-spin text-primary" />
+        불러오는 중…
+      </div>
+    </div>
+  );
 }
 
 /** 실제 숫자 없이 대시보드 모양만 — 사내 IP 가 아닐 때 흐리게 깔아 둔다 */
@@ -125,14 +154,17 @@ export function Dashboard({ client }: { client: ClientSlug }) {
     setClient(client);
   }, [client, setClient]);
 
+  const queryClient = useQueryClient();
   const { data, isError, error, isPlaceholderData } = useQuery({
     queryKey: ["metrics", client, period],
     queryFn: () => fetchMetrics(client, period),
-    placeholderData: keepPreviousData,
+    // 기간을 바꾸면 이전 기간, 클라이언트를 바꾸면(페이지가 새로 열림) 직전에 보던 화면을 흐리게 둔다
+    placeholderData: (prev) => prev ?? latestMetrics(queryClient),
     // 사내 IP 가 아니면 다시 시도해도 같으니 바로 모달을 띄운다
     retry: (count, e) => !(e instanceof IpBlockedError) && count < 3,
   });
   const blocked = error instanceof IpBlockedError ? error : null;
+  const loading = !blocked && !isError && (isPlaceholderData || !data);
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-4 pb-16 sm:px-6 lg:px-8">
@@ -149,15 +181,6 @@ export function Dashboard({ client }: { client: ClientSlug }) {
             </span>
           )}
           {!blocked && <SyncButton />}
-          {isPlaceholderData && (
-            <span
-              className="inline-flex h-6 items-center gap-1 text-st12 font-semibold text-subtle"
-              role="status"
-            >
-              <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
-              불러오는 중…
-            </span>
-          )}
         </div>
         <h1 className="mt-1.5 text-t2 font-bold text-foreground sm:text-t1">
           {info.fullName}
@@ -197,7 +220,6 @@ export function Dashboard({ client }: { client: ClientSlug }) {
           <IpBlockedModal ip={blocked.ip} />
         </>
       ) : data ? (
-        // 지점·기간을 바꾸면 새 데이터가 올 때까지 이전 화면을 흐리게 둔다
         <main
           className={`mt-3 flex flex-col gap-3 transition-opacity duration-200 ${isPlaceholderData ? "pointer-events-none opacity-40" : ""}`}
           aria-busy={isPlaceholderData}
@@ -230,6 +252,7 @@ export function Dashboard({ client }: { client: ClientSlug }) {
           ))}
         </div>
       )}
+      {loading && <LoadingOverlay />}
     </div>
   );
 }
