@@ -13,7 +13,9 @@ import { useEffect, useRef, useState } from "react";
 import type { SyncState, SyncStepState } from "@/db/sync/status";
 
 /** 동기화 중에 진행 상황을 다시 묻는 간격 */
-const POLL_MS = 3_000;
+const POLL_MS = 5_000;
+/** 끝난 뒤 결과를 보여주고 진행 창을 닫기까지 */
+const AUTO_CLOSE_MS = 5_000;
 
 async function fetchSyncState(): Promise<SyncState> {
   const res = await fetch("/api/sync");
@@ -45,14 +47,18 @@ export function SyncButton() {
     onSuccess: (s) => queryClient.setQueryData(["sync-status"], s),
   });
 
-  // 돌던 동기화가 끝나면 카드·차트·표를 다시 불러온다
+  // 돌던 동기화가 끝나면 카드·차트·표를 다시 불러오고, 결과를 잠시 보여준 뒤 진행 창을 닫는다.
+  // 실패한 출처는 버튼 옆 안내로 남는다
   const wasRunning = useRef(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     if (wasRunning.current && state && !state.running) {
       queryClient.invalidateQueries({ queryKey: ["metrics"] });
+      closeTimer.current = setTimeout(() => setOpen(false), AUTO_CLOSE_MS);
     }
     wasRunning.current = state?.running ?? false;
   }, [state, queryClient]);
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   const running = state?.running || start.isPending;
   const steps = state?.steps ?? [];
@@ -65,6 +71,7 @@ export function SyncButton() {
         type="button"
         onClick={() => {
           // 돌고 있을 때 누르면 진행 창만 다시 연다
+          clearTimeout(closeTimer.current);
           setOpen(true);
           if (running) return;
           setClicked(true);
@@ -146,13 +153,7 @@ function SyncDialog({
   running: boolean;
   steps: SyncStepState[];
 }) {
-  const finished = steps.filter(
-    (s) => s.status !== "pending" && s.status !== "running",
-  ).length;
   const failed = steps.some((s) => s.status === "error");
-  const percent = steps.length
-    ? Math.round((finished / steps.length) * 100)
-    : 0;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -171,19 +172,6 @@ function SyncDialog({
               ? "최근 35일(인스타그램은 5주) 데이터를 다시 가져와요. 창을 닫아도 동기화는 계속돼요."
               : "카드·차트·표에 새 데이터가 반영됐어요."}
           </Dialog.Description>
-
-          <div
-            className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface"
-            role="progressbar"
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500"
-              style={{ width: `${percent}%` }}
-            />
-          </div>
 
           <ul className="mt-4 divide-y divide-border">
             {steps.map((s) => (
