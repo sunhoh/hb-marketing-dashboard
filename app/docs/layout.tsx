@@ -1,39 +1,4 @@
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { RootProvider } from "fumadocs-ui/provider/next";
-import { source } from "@/lib/source";
-
-/** fumadocs 기본 문구 → 한국어 */
-const translations = {
-  "On this page(table of contents)": "이 페이지에서",
-  "No Headings(table of contents)": "제목 없음",
-  "Table of Contents(inline table of contents)": "목차",
-  "Previous Page(pagination)": "이전",
-  "Next Page(pagination)": "다음",
-  "Open Sidebar(sidebar)(aria-label)": "메뉴 열기",
-  "Close Sidebar(sidebar)(aria-label)": "메뉴 닫기",
-  "Collapse Sidebar(sidebar)(aria-label)": "메뉴 접기",
-  "Toggle Menu(mobile menu)(aria-label)": "메뉴",
-  "Copy Anchor Link(heading anchor)(aria-label)": "링크 복사",
-  "Copied Anchor Link(heading anchor)(aria-label)": "링크 복사됨",
-  "Copy Text(code block)(aria-label)": "복사",
-  "Copied Text(code block)(aria-label)": "복사됨",
-  "Page Not Found(404 page)": "페이지를 찾을 수 없어요",
-  "Back to Home(404 page)": "처음으로",
-};
-
+/** 틀(사이드바)은 app/layout.tsx 의 AppShell 이 그린다 */
 export default function Layout({ children }: LayoutProps<"/docs">) {
-  return (
-    // 다크모드는 대시보드처럼 시스템 설정만 따른다(next-themes 끔) · 문서가 몇 장뿐이라 검색은 끔
-    <RootProvider theme={{ enabled: false }} search={{ enabled: false }} i18n={{ locale: "ko", translations }}>
-      <DocsLayout
-        tree={source.getPageTree()}
-        nav={{ title: "지표 설명" }}
-        links={[{ text: "← 대시보드", url: "/" }]}
-        themeSwitch={{ enabled: false }}
-        searchToggle={{ enabled: false }}
-      >
-        {children}
-      </DocsLayout>
-    </RootProvider>
-  );
+  return children;
 }

@@ -136,6 +136,17 @@
   }
 }
 
+/*
+ * Next 16 은 지나온 화면을 display:none 으로 숨겨 DOM 에 남겨 둔다(뒤로 가기용). fumadocs 는 숨은 문서 목차(#nd-toc)도
+ * 있다고 보고 목차 칸(268px)을 비워 두므로, 목차가 숨어 있으면 칸을 없앤다 — 문서를 본 뒤 대시보드가 좁아지는 문제.
+ */
+#nd-docs-layout:has(> #nd-toc[style*="display: none"]) {
+  --fd-toc-width: 0px;
+}
+#nd-docs-layout:has(> [class*="grid-area:toc-popover"][style*="display: none"]) {
+  --fd-toc-popover-height: 0px;
+}
+
 /* 문서 코드 블록: fumadocs 는 .dark 클래스일 때만 어두운 글자색으로 바꾸므로 시스템 설정에 맞춰 다시 적는다 */
 @media (prefers-color-scheme: dark) {
   .shiki:not(.not-fumadocs-codeblock *) code span,

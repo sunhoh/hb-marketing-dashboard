@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DashboardSkeleton } from "@/components/dashboard/skeleton";
+import { ShellMain } from "@/components/shell-main";
 import { CLIENTS } from "@/lib/clients";
 import { readStoredClient } from "@/lib/use-preferences";
 
@@ -12,5 +13,9 @@ export default function Home() {
   useEffect(() => {
     router.replace(`/clients/${readStoredClient() ?? CLIENTS[0].slug}`);
   }, [router]);
-  return <DashboardSkeleton />;
+  return (
+    <ShellMain>
+      <DashboardSkeleton />
+    </ShellMain>
+  );
 }
