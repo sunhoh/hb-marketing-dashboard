@@ -24,18 +24,40 @@ const translations = {
   "Back to Home(404 page)": "처음으로",
 };
 
-/** 사이드바: 대시보드(클라이언트별) + 지표 설명(문서 페이지) */
+/**
+ * 사이드바: 지금 있는 섹션의 하위 메뉴 + 다른 섹션으로 가는 링크 하나.
+ * 두 섹션을 root 폴더로 두면 fumadocs 가 현재 페이지가 속한 폴더만 보여 준다.
+ * 지표 설명을 먼저 둔다 — 대시보드 쪽 '지표 설명' 링크(/docs)보다 문서 폴더의 /docs 가 먼저 찾아져야 해서.
+ */
 function navTree(): PageTree.Root {
   const docs = source.getPageTree();
   return {
     name: "마케팅 대시보드",
     children: [
-      { type: "separator", name: "대시보드", icon: <LayoutDashboard /> },
-      ...CLIENTS.map(
-        (c): PageTree.Item => ({ type: "page", name: c.name, url: `/clients/${c.slug}` }),
-      ),
-      { type: "separator", name: "지표 설명", icon: <BookOpen /> },
-      ...docs.children,
+      {
+        type: "folder",
+        root: true,
+        name: "지표 설명",
+        children: [
+          { type: "separator", name: "지표 설명", icon: <BookOpen /> },
+          ...docs.children,
+          { type: "separator" },
+          { type: "page", name: "대시보드", url: "/", icon: <LayoutDashboard /> },
+        ],
+      },
+      {
+        type: "folder",
+        root: true,
+        name: "대시보드",
+        children: [
+          { type: "separator", name: "대시보드", icon: <LayoutDashboard /> },
+          ...CLIENTS.map(
+            (c): PageTree.Item => ({ type: "page", name: c.name, url: `/clients/${c.slug}` }),
+          ),
+          { type: "separator" },
+          { type: "page", name: "지표 설명", url: "/docs", icon: <BookOpen /> },
+        ],
+      },
     ],
   };
 }
@@ -50,6 +72,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         nav={{ title: "힐링브리즈 마케팅", url: "/" }}
         themeSwitch={{ enabled: false }}
         searchToggle={{ enabled: false }}
+        // 섹션 전환은 사이드바 아래 링크로 한다(상단 탭 선택기 끔)
+        tabs={false}
       >
         {children}
       </DocsLayout>

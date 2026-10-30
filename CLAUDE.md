@@ -113,7 +113,7 @@
 
 ## 지표 설명 문서 (`/docs`)
 
-- 사이드바: 대시보드와 문서가 같은 틀(`components/app-shell.tsx`, fumadocs DocsLayout)을 쓴다. 메뉴 = 클라이언트 + 문서 페이지. 대시보드 화면은 `ShellMain` 으로 본문 칸에 놓는다(`min-w-0` 없으면 모바일 가로 스크롤).
+- 사이드바: 대시보드와 문서가 같은 틀(`components/app-shell.tsx`, fumadocs DocsLayout)을 쓴다. 메뉴는 두 root 폴더(지표 설명·대시보드)라 지금 섹션의 하위 메뉴 + 다른 섹션 링크 하나만 보인다(문서 폴더가 먼저여야 /docs 가 문서 쪽으로 찾아짐). 대시보드 화면은 `ShellMain` 으로 본문 칸에 놓는다(`min-w-0` 없으면 모바일 가로 스크롤).
 - Fumadocs. 본문은 `content/docs/*.mdx`(사용자가 직접 고친다), 메뉴 순서는 `content/docs/meta.json`.
 - 문턱값·전환 이벤트·유입 이름 규칙 표는 `components/docs/live.tsx` 가 코드 상수를 직접 읽는다 — 상수를 새로 만들면 여기에도 연결.
 - 계산·기간·화면 규칙을 바꾸면 해당 `.mdx` 문장도 같이 고친다.
