@@ -204,7 +204,8 @@ export function Dashboard({ client }: { client: ClientSlug }) {
         </p>
       </header>
 
-      <div className="sticky top-0 z-20 -mx-4 bg-background/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      {/* 사이드바(z-20)·모바일 상단 메뉴(z-30)보다 아래, 모바일에서는 상단 메뉴 바로 밑(--fd-docs-row-3)에 붙는다 */}
+      <div className="sticky top-(--fd-docs-row-3) z-10 -mx-4 bg-background/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <FilterBar
           client={client}
           period={period}
