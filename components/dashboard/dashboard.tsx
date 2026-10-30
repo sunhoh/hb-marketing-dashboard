@@ -5,7 +5,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { LoaderCircle, Lock } from "lucide-react";
+import { BookOpen, LoaderCircle, Lock } from "lucide-react";
+import Link from "next/link";
 import { useEffect } from "react";
 import { getClient } from "@/lib/clients";
 import type { Metrics } from "@/lib/build-metrics";
@@ -184,6 +185,13 @@ export function Dashboard({ client }: { client: ClientSlug }) {
             </span>
           )}
           {!blocked && <SyncButton />}
+          <Link
+            href="/docs"
+            className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-st12 font-semibold text-subtle hover:bg-surface hover:text-body"
+          >
+            <BookOpen className="size-3.5" />
+            지표 설명
+          </Link>
         </div>
         <h1 className="mt-1.5 text-t2 font-bold text-foreground sm:text-t1">
           {info.fullName}

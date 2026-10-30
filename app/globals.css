@@ -1,8 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* 지표 설명 문서(/docs). 색은 아래 토큰을 그대로 쓴다 */
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
 
-/* 다크모드는 시스템 설정을 따른다 */
+/* 다크모드는 시스템 설정을 따른다 — fumadocs 의 .dark 클래스 방식을 덮어쓰므로 fumadocs 가져오기 뒤에 둔다 */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 /*
@@ -75,6 +78,15 @@
   --chart-4: #a234c7;
   --chart-grid: var(--grey200);
   --chart-axis: var(--grey500);
+
+  /* 문서(/docs) 사이드바 — fumadocs shadcn.css 가 읽는 이름 */
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-accent: var(--surface);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-ring: var(--ring);
+  --sidebar-primary-foreground: var(--primary-foreground);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -121,6 +133,15 @@
     --chart-4: #b44bd7;
     --chart-grid: rgba(255, 255, 255, 0.08);
     --chart-axis: #84848c;
+  }
+}
+
+/* 문서 코드 블록: fumadocs 는 .dark 클래스일 때만 어두운 글자색으로 바꾸므로 시스템 설정에 맞춰 다시 적는다 */
+@media (prefers-color-scheme: dark) {
+  .shiki:not(.not-fumadocs-codeblock *) code span,
+  code.shiki:not(.not-fumadocs-code *) span {
+    color: var(--shiki-dark);
+    font-style: var(--shiki-dark-font-style);
   }
 }
 

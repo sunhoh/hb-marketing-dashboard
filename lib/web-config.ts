@@ -11,7 +11,7 @@ export const CONVERSION_EVENTS: Record<ClientSlug, string[]> = {
 };
 
 /** GA4 유입(소스 / 매체) → 화면 이름. 없으면 원래 값을 그대로 보여 준다 */
-const SOURCE_RULES: [RegExp, string][] = [
+export const SOURCE_RULES: [RegExp, string][] = [
   [/^google \/ cpc$/, "구글 광고"],
   [/^google \/ organic$/, "구글 검색"],
   [/^naver \/ organic$/, "네이버 검색"],

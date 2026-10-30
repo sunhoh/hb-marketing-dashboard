@@ -111,6 +111,13 @@
 
 라우트: `/` 는 마지막으로 본 클라이언트로 이동, `/clients/[slug]` 클라이언트 화면. 화면 데이터는 `/api/metrics` → `lib/data.ts` `getMetrics()` → `db/dataset.ts`(DB 읽기) + `lib/build-metrics.ts`(순수 계산).
 
+## 지표 설명 문서 (`/docs`)
+
+- Fumadocs. 본문은 `content/docs/*.mdx`(사용자가 직접 고친다), 메뉴 순서는 `content/docs/meta.json`.
+- 문턱값·전환 이벤트·유입 이름 규칙 표는 `components/docs/live.tsx` 가 코드 상수를 직접 읽는다 — 상수를 새로 만들면 여기에도 연결.
+- 계산·기간·화면 규칙을 바꾸면 해당 `.mdx` 문장도 같이 고친다.
+- 다크모드는 시스템 설정만(`RootProvider theme` 끔, `globals.css` 에서 dark variant 를 fumadocs 뒤에 다시 선언). 문서 페이지는 IP 제한 밖이라 계정 ID·키 같은 값은 쓰지 않는다.
+
 ## 주의할 점 (겪은 문제)
 
 - **Supabase Transaction pooler(6543) + postgres.js 파이프라이닝 = 멈춤.** 화면 읽기는 `readDb`(`max_pipeline: 0`)만 쓴다. `max_pipeline: 0` 은 트랜잭션을 깨뜨리므로 동기화는 `db`(기본 설정). 자세한 이유는 `db/index.ts` 주석.

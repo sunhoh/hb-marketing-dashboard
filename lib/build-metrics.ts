@@ -84,9 +84,14 @@ export const SEARCH_QUERY_TOP = 10;
 /** 소재 OFF 후보 문턱 (기준 = 같은 클라이언트 메타 소재 전체 값) */
 export const OFF_CTR_RATIO = 0.7;
 export const OFF_CPC_RATIO = 1.3;
-const OFF_MIN_IMPRESSIONS = 5_000;
+export const OFF_MIN_IMPRESSIONS = 5_000;
 /** 노출이 이보다 적은 소재는 CTR 이 우연히 튀어서(노출 5회에 클릭 1번 = 20%) 순위에서 뺀다 */
-const RANK_MIN_IMPRESSIONS = 1_000;
+export const RANK_MIN_IMPRESSIONS = 1_000;
+/**
+ * 도착률이 이보다 낮으면 실제로 안 들어온 게 아니라 UTM 이 짝지어지지 않은 것(이름으로 직접 쓴 UTM 등).
+ * 정상 캠페인은 30~80% 정도라서 채널 표에서 숫자 대신 "UTM 확인"을 보여 준다.
+ */
+export const UTM_SUSPECT_RATE = 5;
 
 export type ChannelRow = DerivedTotals & {
   id: string;

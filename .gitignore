@@ -45,3 +45,6 @@ next-env.d.ts
 
 # service account keys
 /.secrets/
+
+# fumadocs (생성 파일)
+/.source/

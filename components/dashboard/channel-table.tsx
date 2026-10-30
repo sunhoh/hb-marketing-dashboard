@@ -28,6 +28,7 @@ import {
   BASELINE_WEEKS,
   type ChannelRow,
   type Metrics,
+  UTM_SUSPECT_RATE,
 } from "@/lib/build-metrics";
 import { EMPTY, formatNumber, formatPercent, formatWon } from "@/lib/metrics";
 import { type TableView, useTableView } from "@/lib/use-preferences";
@@ -82,11 +83,6 @@ const numericSort: SortFn<typeof features, ChannelRow> = (a, b, id) => {
   return x - y;
 };
 
-/**
- * 도착률이 이보다 낮으면 실제로 안 들어온 게 아니라 UTM 이 짝지어지지 않은 것(이름으로 직접 쓴 UTM 등).
- * 정상 캠페인은 30~80% 정도라서 숫자 대신 "UTM 확인"을 보여 준다.
- */
-const UTM_SUSPECT_RATE = 5;
 const utmSuspect = (r: ChannelRow) =>
   r.arrivalRate !== null && r.arrivalRate < UTM_SUSPECT_RATE;
 

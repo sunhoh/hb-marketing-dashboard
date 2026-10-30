@@ -13,15 +13,20 @@
     "sheet:template": "tsx scripts/make-sheet-template.ts",
     "sync": "tsx scripts/sync.ts",
     "db:start": "/opt/homebrew/opt/postgresql@18/bin/pg_ctl -D .data/postgres -l .data/postgres.log -o \"-p 5433 -k /tmp -c listen_addresses=localhost\" start",
-    "db:stop": "/opt/homebrew/opt/postgresql@18/bin/pg_ctl -D .data/postgres stop"
+    "db:stop": "/opt/homebrew/opt/postgresql@18/bin/pg_ctl -D .data/postgres stop",
+    "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@tanstack/react-query": "^5.105.0",
     "@tanstack/react-table": "^9.3.1",
+    "@types/mdx": "^2.0.14",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
     "drizzle-orm": "^0.45.4",
+    "fumadocs-core": "^16.17.9",
+    "fumadocs-mdx": "^15.4.10",
+    "fumadocs-ui": "^16.17.9",
     "google-auth-library": "^11.3.1",
     "lucide-react": "^1.61.0",
     "next": "16.4.3",
