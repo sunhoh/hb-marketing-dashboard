@@ -4,6 +4,12 @@ import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layo
 import { getMDXComponents } from "@/components/docs/mdx";
 import { source } from "@/lib/source";
 
+/**
+ * 문서는 빌드 때 모두 만들어 두는 정적 페이지라, 이동할 때 잠깐 기다려도(blocking) 빠르다.
+ * <Suspense> 로 감싸면 문서 → 문서 이동마다 본문·목차가 비었다 다시 차서 화면이 흔들린다.
+ */
+export const instant = false;
+
 export function generateStaticParams() {
   return source.generateParams();
 }
