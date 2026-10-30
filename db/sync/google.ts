@@ -5,7 +5,13 @@
  */
 import { and, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
-import { ga4Daily, gscDaily, gscQueryDaily, syncRuns } from "@/db/schema";
+import {
+  ga4Daily,
+  gscDaily,
+  gscQueryDaily,
+  landingDaily,
+  syncRuns,
+} from "@/db/schema";
 import { addDays } from "@/lib/periods";
 import { CONVERSION_EVENTS } from "@/lib/web-config";
 import type { ClientSlug } from "@/lib/types";
@@ -24,6 +30,14 @@ const GA4_PROPERTIES: Record<ClientSlug, string | null> = {
   luho: "557924179",
 };
 
+
+/**
+ * 광고 랜딩페이지 전용 GA4 속성 → 클라이언트(2026-10-30). 랜딩 방문을 캠페인·소재별로 받는다.
+ * 지유 campaign.gu.clinic 은 나라별 랜딩이 모두 한 속성(스트림 campaign, G-73FCYJH7DL)에 쌓인다.
+ */
+const LANDING_PROPERTIES: { client: ClientSlug; property: string }[] = [
+  { client: "gu-gangnam", property: "522053510" },
+];
 
 /** 서치 콘솔 속성 → 클라이언트. gu.clinic 은 일산 하위 도메인까지 포함하므로 페이지 주소로 나눈다 */
 const GSC_TARGETS: {
@@ -180,6 +194,61 @@ async function syncGa4(
   return report;
 }
 
+/** 랜딩 방문 = 날짜 × utm_campaign × utm_content × 유입 경로의 세션 */
+async function syncLanding(
+  auth: ReturnType<typeof googleJwt>,
+  since: string,
+  until: string,
+) {
+  const report: { client: ClientSlug; sessions: number; rows: number }[] = [];
+  for (const { client, property } of LANDING_PROPERTIES) {
+    const res = await ga4Report(auth, property, {
+      dateRanges: [{ startDate: since, endDate: until }],
+      dimensions: [
+        { name: "date" },
+        { name: "sessionCampaignName" },
+        { name: "sessionManualAdContent" },
+        { name: "sessionSourceMedium" },
+      ],
+      metrics: [{ name: "sessions" }],
+    });
+    const rows = res
+      .map((r) => ({
+        date: ymd(r.dimensionValues[0].value),
+        client,
+        property,
+        campaign: r.dimensionValues[1].value,
+        // GA4 는 값이 없으면 "(not set)" 을 준다
+        content:
+          r.dimensionValues[2].value === "(not set)"
+            ? ""
+            : r.dimensionValues[2].value,
+        sourceMedium: r.dimensionValues[3].value,
+        sessions: Number(r.metricValues[0].value),
+      }))
+      .filter((r) => r.sessions > 0);
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(landingDaily)
+        .where(
+          and(
+            eq(landingDaily.property, property),
+            gte(landingDaily.date, since),
+            lte(landingDaily.date, until),
+          ),
+        );
+      for (let i = 0; i < rows.length; i += 1000)
+        await tx.insert(landingDaily).values(rows.slice(i, i + 1000));
+    });
+    report.push({
+      client,
+      rows: rows.length,
+      sessions: rows.reduce((a, r) => a + r.sessions, 0),
+    });
+  }
+  return report;
+}
+
 type GscResponse = {
   rows?: {
     keys: string[];
@@ -306,10 +375,17 @@ export async function syncGoogle(days = DEFAULT_DAYS) {
   const auth = googleJwt(SCOPES);
   const result: {
     ga4?: Awaited<ReturnType<typeof syncGa4>>;
+    landing?: Awaited<ReturnType<typeof syncLanding>>;
     gsc?: Awaited<ReturnType<typeof syncGsc>>;
   } = {};
   for (const [source, job] of [
-    ["ga4_api", async () => (result.ga4 = await syncGa4(auth, since, until))],
+    [
+      "ga4_api",
+      async () => {
+        result.ga4 = await syncGa4(auth, since, until);
+        result.landing = await syncLanding(auth, since, until);
+      },
+    ],
     ["gsc_api", async () => (result.gsc = await syncGsc(auth, since, until))],
   ] as const) {
     const [run] = await db

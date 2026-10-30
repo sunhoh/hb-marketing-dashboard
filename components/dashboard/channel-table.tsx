@@ -29,7 +29,7 @@ import {
   type ChannelRow,
   type Metrics,
 } from "@/lib/build-metrics";
-import { formatNumber, formatPercent, formatWon } from "@/lib/metrics";
+import { EMPTY, formatNumber, formatPercent, formatWon } from "@/lib/metrics";
 import { type TableView, useTableView } from "@/lib/use-preferences";
 import { cn } from "@/lib/utils";
 import { EmptyState, Section } from "./primitives";
@@ -46,7 +46,16 @@ function isWorse(row: ChannelRow, key: "ctr" | "cpc" | "cpm") {
 
 type ColumnMeta = { numeric?: boolean; flag?: "ctr" | "cpc" | "cpm" };
 type NumericKey =
-  "spend" | "impressions" | "clicks" | "conversions" | "ctr" | "cpc" | "cpm";
+  | "spend"
+  | "impressions"
+  | "clicks"
+  | "conversions"
+  | "ctr"
+  | "cpc"
+  | "cpm"
+  | "landingVisits"
+  | "arrivalRate"
+  | "costPerVisit";
 
 const VIEWS: { value: TableView; label: string }[] = [
   { value: "campaign", label: "캠페인별" },
@@ -72,6 +81,14 @@ const numericSort: SortFn<typeof features, ChannelRow> = (a, b, id) => {
   if (y === null) return -1;
   return x - y;
 };
+
+/**
+ * 도착률이 이보다 낮으면 실제로 안 들어온 게 아니라 UTM 이 짝지어지지 않은 것(이름으로 직접 쓴 UTM 등).
+ * 정상 캠페인은 30~80% 정도라서 숫자 대신 "UTM 확인"을 보여 준다.
+ */
+const UTM_SUSPECT_RATE = 5;
+const utmSuspect = (r: ChannelRow) =>
+  r.arrivalRate !== null && r.arrivalRate < UTM_SUSPECT_RATE;
 
 /** 캠페인 이름 옆: 광고 계정(계정이 여럿일 때만), 꺼짐 */
 function CampaignTags({
@@ -103,6 +120,8 @@ export function ChannelTable({ data }: { data: Metrics }) {
   // 메타 계정이 여럿인 클라이언트(GU강남)만 캠페인 옆에 계정 이름을 붙인다
   const showAccount =
     new Set(data.campaigns.map((r) => r.account).filter(Boolean)).size > 1;
+  // 랜딩 방문 칸은 캠페인별 보기에서, 랜딩 GA4 가 연결된 클라이언트만(국가별은 GA4 국가와 기준이 달라 뺀다)
+  const showLanding = view === "campaign" && data.landing !== null;
 
   const columns = useMemo<Col[]>(() => {
     const num = (
@@ -121,6 +140,38 @@ export function ChannelTable({ data }: { data: Metrics }) {
         flag: key === "ctr" || key === "cpc" || key === "cpm" ? key : undefined,
       },
     });
+    const landingCols: Col[] = showLanding
+      ? [
+          {
+            ...num("landingVisits", "랜딩 방문", formatNumber),
+            cell: ({ row }) =>
+              utmSuspect(row.original) ? (
+                <span
+                  className="rounded-sm bg-warn-bg px-1 text-st12 font-semibold text-warn-fg"
+                  title={`랜딩 방문 ${formatNumber(row.original.landingVisits)}건 · 클릭에 비해 너무 적어요. 광고 링크 UTM 이 캠페인 ID 로 들어갔는지 확인해 주세요`}
+                >
+                  UTM 확인
+                </span>
+              ) : (
+                formatNumber(row.original.landingVisits)
+              ),
+          },
+          {
+            ...num("arrivalRate", "도착률", (v) => formatPercent(v)),
+            cell: ({ row }) =>
+              utmSuspect(row.original)
+                ? EMPTY
+                : formatPercent(row.original.arrivalRate),
+          },
+          {
+            ...num("costPerVisit", "방문당 비용", formatWon),
+            cell: ({ row }) =>
+              utmSuspect(row.original)
+                ? EMPTY
+                : formatWon(row.original.costPerVisit),
+          },
+        ]
+      : [];
     return [
       {
         id: "channel",
@@ -182,6 +233,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
       num("spend", "소진액", formatWon),
       num("impressions", "노출", formatNumber),
       num("clicks", "클릭", formatNumber),
+      ...landingCols,
       num("ctr", "CTR", (v) => formatPercent(v)),
       num("cpc", "CPC", formatWon),
       num("cpm", "CPM", formatWon),
@@ -197,7 +249,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
         ),
       },
     ];
-  }, [showAccount]);
+  }, [showAccount, showLanding]);
 
   const table = useTable({
     features,
@@ -238,7 +290,7 @@ export function ChannelTable({ data }: { data: Metrics }) {
             주황 칸
           </span>{" "}
           은 같은 행의 직전 {BASELINE_WEEKS}주보다 {BASELINE_TOLERANCE * 100}%
-          이상 나쁜 값
+          이상 나쁜 값{showLanding && " · 도착률 = 랜딩 방문 ÷ 클릭"}
         </>
       }
     >
@@ -340,6 +392,16 @@ export function ChannelTable({ data }: { data: Metrics }) {
             </TableBody>
           </Table>
         </div>
+      )}
+      {showLanding && data.landing!.unmatched > 0 && (
+        <p className="mt-3 text-st12 text-subtle">
+          캠페인과 연결하지 못한 랜딩 방문{" "}
+          <span className="tabular font-semibold text-body">
+            {formatNumber(data.landing!.unmatched)}
+          </span>
+          건 (전체 {formatNumber(data.landing!.total)}건) · 광고 링크의 UTM 이
+          캠페인 ID 가 아니라 이름 등으로 들어간 방문이에요
+        </p>
       )}
     </Section>
   );

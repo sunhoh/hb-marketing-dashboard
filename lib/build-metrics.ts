@@ -2,7 +2,15 @@
  * 원본 레코드(Dataset) → 화면용 지표. DB 를 모르는 순수 계산이라 브라우저에서도 import 할 수 있다.
  */
 import { CHANNEL_LABELS, CLIENTS, CONVERSION_LABELS } from "./clients";
-import { cpc, ctr, deriveAll, sumTotals, type DerivedTotals } from "./metrics";
+import {
+  arrivalRate,
+  costPerVisit,
+  cpc,
+  ctr,
+  deriveAll,
+  sumTotals,
+  type DerivedTotals,
+} from "./metrics";
 import {
   addDays,
   type DateRange,
@@ -47,6 +55,14 @@ export type Dataset = {
     impressions: number;
     positionSum: number;
   }[];
+  /** 광고 랜딩 방문. campaign·content = utm_campaign·utm_content(메타 캠페인·광고 ID 면 표에 붙는다) */
+  landing: {
+    client: ClientSlug; // 랜딩 GA4 속성의 클라이언트
+    date: string;
+    campaign: string;
+    content: string;
+    sessions: number;
+  }[];
   gscQueries: {
     client: ClientSlug;
     date: string;
@@ -83,6 +99,10 @@ export type ChannelRow = DerivedTotals & {
   active?: boolean | null; // 캠페인·소재 행만. null = 상태를 모름
   conversionLabel: string;
   baseline: { ctr: number | null; cpc: number | null; cpm: number | null };
+  /** 메타 캠페인·소재 행만, 랜딩 방문이 있을 때. 없으면 null(— 표시) */
+  landingVisits: number | null;
+  arrivalRate: number | null; // 랜딩 방문 ÷ 링크 클릭
+  costPerVisit: number | null; // 소진액 ÷ 랜딩 방문
   subRows?: ChannelRow[]; // 펼치면 보이는 한 단계 아래(국가별 → 캠페인, 캠페인별 → 소재·광고그룹)
 };
 
@@ -189,6 +209,7 @@ export function buildMetrics(
     key: (r: AdMetric) => string,
     describe: (r: AdMetric) => Partial<ChannelRow>,
     sub?: (rows: AdMetric[], base: AdMetric[]) => ChannelRow[],
+    visitsOf?: (r: AdMetric) => number | null,
   ): ChannelRow[] => {
     const baseByKey = groupBy(base, key);
     return [...groupBy(rows, key)].map(([id, list]) => {
@@ -206,7 +227,7 @@ export function buildMetrics(
           ? { ctr: b.ctr, cpc: b.cpc, cpm: b.cpm }
           : { ctr: null, cpc: null, cpm: null },
         ...describe(first),
-        ...deriveAll(sumTotals(list)),
+        ...withVisits(deriveAll(sumTotals(list)), visitsOf?.(first)),
         // 아래 줄이 하나뿐이고 이름도 같으면(국가별 보기의 네이버 캠페인 등) 펼칠 게 없다
         subRows:
           children &&
@@ -218,6 +239,42 @@ export function buildMetrics(
       };
     });
   };
+  // 랜딩 방문 — utm_campaign(메타 캠페인 ID)·utm_content(광고 ID)로 짝짓는다. 다른 클라이언트의
+  // 랜딩 속성에 쌓였어도 캠페인 ID 가 같으면 붙인다(예: 국내_일산 캠페인이 지유 랜딩으로 보낸 경우)
+  const landingNow = within(ds.landing, range.current);
+  const visitsBy = (key: (r: (typeof landingNow)[number]) => string) => {
+    const map = new Map<string, number>();
+    for (const r of landingNow) {
+      const k = key(r);
+      if (k) map.set(k, (map.get(k) ?? 0) + r.sessions);
+    }
+    return map;
+  };
+  const visitsByCampaign = visitsBy((r) => r.campaign);
+  const visitsByAd = visitsBy((r) => r.content);
+  const metaVisits = (map: Map<string, number>, id: string | undefined) =>
+    id ? (map.get(id) ?? null) : null;
+  const withVisits = (t: DerivedTotals, visits: number | null | undefined) => ({
+    ...t,
+    landingVisits: visits ?? null,
+    arrivalRate: arrivalRate(visits ?? null, t.clicks),
+    costPerVisit: costPerVisit(t.spend, visits ?? null),
+  });
+  // 메타 캠페인 ID 가 아닌 utm_campaign(이름을 직접 쓴 UTM, 다른 계정 등)은 이 클라이언트의 "미연결"로 센다
+  const knownCampaigns = new Set([
+    ...ds.daily.map((r) => r.campaignId),
+    ...Object.keys(ds.activeById),
+  ]);
+  const ownLanding = landingNow.filter((r) => r.client === client);
+  const landing = ownLanding.length
+    ? {
+        total: ownLanding.reduce((a, r) => a + r.sessions, 0),
+        unmatched: ownLanding
+          .filter((r) => !knownCampaigns.has(r.campaign))
+          .reduce((a, r) => a + r.sessions, 0),
+      }
+    : null;
+
   const channelKey = (r: AdMetric) => `${r.client}|${r.channel}`;
   const campaignOf = (r: AdMetric): Partial<ChannelRow> => ({
     segment: r.campaign,
@@ -255,8 +312,13 @@ export function buildMetrics(
                   ? (ds.activeById[r.detailId] ?? null)
                   : null,
             }),
+            undefined,
+            (r) =>
+              r.channel === "meta" ? metaVisits(visitsByAd, r.detailId) : null,
           )
         : [],
+    (r) =>
+      r.channel === "meta" ? metaVisits(visitsByCampaign, r.campaignId) : null,
   );
 
   // 메타 소재
@@ -480,6 +542,7 @@ export function buildMetrics(
     weekly,
     channels,
     campaigns,
+    landing,
     creatives,
     web,
     organic: { sns, youtube, search },

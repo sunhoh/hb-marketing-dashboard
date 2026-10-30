@@ -28,6 +28,18 @@ export function cpm(t: Pick<Totals, "spend" | "impressions">) {
   return v === null ? null : v * 1000;
 }
 
+/** 도착률 = 랜딩 방문 ÷ 링크 클릭 × 100. 클릭하고 페이지가 뜨기 전에 나간 사람이 많으면 낮다 */
+export function arrivalRate(visits: number | null, clicks: number) {
+  if (visits === null) return null;
+  const v = safeDivide(visits, clicks);
+  return v === null ? null : v * 100;
+}
+
+/** 방문당 비용 = 소진액 ÷ 랜딩 방문 */
+export function costPerVisit(spend: number, visits: number | null) {
+  return visits === null ? null : safeDivide(spend, visits);
+}
+
 /** 증감률 = (이번 기간 − 이전 기간) ÷ 이전 기간 × 100 */
 export function changeRate(current: number | null, previous: number | null) {
   if (current === null || previous === null) return null;

@@ -7,7 +7,7 @@ import type { Dataset } from "@/lib/build-metrics";
 import { COUNTRY_LABELS, CREATIVE_FORMAT_LABELS } from "@/lib/clients";
 import { weeksUntil } from "@/lib/periods";
 import type { AdMetric, Creative } from "@/lib/types";
-import { db } from ".";
+import { readDb as db } from ".";
 import { META_AD_ACCOUNTS } from "./sync/meta";
 import {
   adMetrics,
@@ -16,6 +16,7 @@ import {
   ga4Daily,
   gscDaily,
   gscQueryDaily,
+  landingDaily,
   snsWeekly,
   syncRuns,
   youtubeVideos,
@@ -139,6 +140,7 @@ export async function loadDbDataset(): Promise<{
     ads,
     creativeRows,
     campaignRows,
+    landingRows,
     sns,
     videos,
     ga4Rows,
@@ -149,6 +151,16 @@ export async function loadDbDataset(): Promise<{
     db.select().from(adMetrics).where(gte(adMetrics.date, from)),
     db.select().from(creatives),
     db.select({ id: campaigns.id, active: campaigns.active }).from(campaigns),
+    db
+      .select({
+        date: landingDaily.date,
+        client: landingDaily.client,
+        campaign: landingDaily.campaign,
+        content: landingDaily.content,
+        sessions: landingDaily.sessions,
+      })
+      .from(landingDaily)
+      .where(gte(landingDaily.date, from)),
     db.select().from(snsWeekly).where(gte(snsWeekly.weekStart, from)),
     db
       .select()
@@ -228,6 +240,10 @@ export async function loadDbDataset(): Promise<{
       impressions: r.impressions,
       positionSum: r.positionSum,
     })),
+    // 유입 경로(fb·ig·an …)는 화면에서 나누지 않으므로 합친다
+    landing: sumByDay(landingRows, (r) => [r.client, r.campaign, r.content], [
+      "sessions",
+    ]),
     videos: videos.map((v) => ({
       client: v.client,
       id: v.videoId,

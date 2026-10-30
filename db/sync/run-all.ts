@@ -99,6 +99,10 @@ async function runStep(
           (g) =>
             `GA4 ${name(g.client)}: ${r.since} ~ ${r.until}, 세션 ${formatNumber(g.sessions)}, 전환 ${formatNumber(g.conversions)}`,
         ),
+        ...(r.landing ?? []).map(
+          (g) =>
+            `랜딩페이지 ${name(g.client)}: ${r.since} ~ ${r.until}, 방문 ${formatNumber(g.sessions)}`,
+        ),
         ...(r.gsc?.report ?? []).map(
           (g) =>
             `서치 콘솔 ${name(g.client)}: ${r.gsc!.since} ~ ${r.until}, 클릭 ${formatNumber(g.clicks)}, 노출 ${formatNumber(g.impressions)}, 검색어 ${formatNumber(g.queries)}줄`,

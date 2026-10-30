@@ -256,6 +256,35 @@ export const ga4Daily = pgTable(
   (t) => [unique("ga4_daily_key").on(t.date, t.client, t.sourceMedium)],
 );
 
+/**
+ * 광고 랜딩페이지 방문(GA4, 일 단위). 캠페인 랜딩 전용 GA4 속성(campaign.gu.clinic 등)에서 받는다.
+ * campaign·content 는 광고 링크의 utm_campaign·utm_content 그대로 — 메타 캠페인·광고 ID 면
+ * ad_metrics.campaign_id·creative_id 와 짝지어 채널별 효율 표에 붙고, 이름 등 다른 값이면 "미연결"로 센다.
+ */
+export const landingDaily = pgTable(
+  "landing_daily",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    client: client(),
+    property: text("property").notNull(), // GA4 속성 ID
+    campaign: text("campaign").notNull(), // utm_campaign
+    content: text("content").notNull(), // utm_content, 없으면 ""
+    sourceMedium: text("source_medium").notNull(), // 예) "fb / paid"
+    sessions: integer("sessions").notNull(),
+    syncedAt: syncedAt(),
+  },
+  (t) => [
+    unique("landing_daily_key").on(
+      t.date,
+      t.property,
+      t.campaign,
+      t.content,
+      t.sourceMedium,
+    ),
+  ],
+);
+
 /** 서치 콘솔 일별 합계. 평균 순위 = positionSum ÷ impressions (노출 가중 평균) */
 export const gscDaily = pgTable(
   "gsc_daily",

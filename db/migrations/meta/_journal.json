@@ -99,6 +99,13 @@
       "when": 1793261612622,
       "tag": "0013_campaigns",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793324239523,
+      "tag": "0014_landing_daily",
+      "breakpoints": true
     }
   ]
 }
