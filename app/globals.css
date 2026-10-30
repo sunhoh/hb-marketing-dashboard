@@ -138,12 +138,13 @@
 
 /*
  * Next 16 은 지나온 화면을 display:none 으로 숨겨 DOM 에 남겨 둔다(뒤로 가기용). fumadocs 는 숨은 문서 목차(#nd-toc)도
- * 있다고 보고 목차 칸(268px)을 비워 두므로, 목차가 숨어 있으면 칸을 없앤다 — 문서를 본 뒤 대시보드가 좁아지는 문제.
+ * 있다고 보고 목차 칸(268px)을 비워 두므로, 보이는 목차가 하나도 없을 때만 칸을 없앤다 — 문서를 본 뒤 대시보드가 좁아지는 문제.
+ * (숨은 목차가 하나라도 있으면 없애는 식으로 쓰면 문서 → 문서 이동 때 새 문서의 목차까지 사라진다)
  */
-#nd-docs-layout:has(> #nd-toc[style*="display: none"]) {
+#nd-docs-layout:not(:has(> #nd-toc:not([style*="display: none"]))) {
   --fd-toc-width: 0px;
 }
-#nd-docs-layout:has(> [class*="grid-area:toc-popover"][style*="display: none"]) {
+#nd-docs-layout:not(:has(> [class*="grid-area:toc-popover"]:not([style*="display: none"]))) {
   --fd-toc-popover-height: 0px;
 }
 
